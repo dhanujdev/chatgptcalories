@@ -94,6 +94,24 @@ function toolStatus(invoking: string, invoked: string) {
   } as const;
 }
 
+function getParsedBody(req: any) {
+  const body = req?.body;
+  if (body == null) {
+    return undefined;
+  }
+
+  if (Buffer.isBuffer(body)) {
+    const text = body.toString("utf8");
+    return text ? JSON.parse(text) : undefined;
+  }
+
+  if (typeof body === "string") {
+    return body ? JSON.parse(body) : undefined;
+  }
+
+  return body;
+}
+
 // ─── MCP server factory ──────────────────────────────────────────────
 
 function createAppServer(): McpServer {
@@ -398,7 +416,7 @@ export default async function handler(req: any, res: any) {
 
     try {
       await server.connect(transport);
-      await transport.handleRequest(req as any, res as any);
+      await transport.handleRequest(req as any, res as any, getParsedBody(req));
       return;
     } catch (error) {
       console.error("Failed to handle MCP request", error);
