@@ -37,7 +37,7 @@ import {
 } from "./widgetTools.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const WIDGET_URI = "ui://widget/calorie-command-v3.html";
+const WIDGET_URI = "ui://widget/calorie-command-v4.html";
 const PORT = Number(process.env.PORT ?? 8787);
 const MCP_PATH = "/mcp";
 
