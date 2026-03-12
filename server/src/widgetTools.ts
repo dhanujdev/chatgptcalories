@@ -213,6 +213,13 @@ function suggestions(remaining: MacroTotals): string[] {
   return items.length > 0 ? items : ["Momentum looks good. Repeat the same structure tomorrow."];
 }
 
+function dashboardSummaryLine(snapshot: DashboardSnapshot): string {
+  return (
+    `Today shows ${Math.round(snapshot.summary.totals.calories)} calories logged, ` +
+    `with ${Math.round(snapshot.summary.remaining.calories)} calories remaining.`
+  );
+}
+
 function buildWeeklyTrend(entries: FoodEntryRow[], endDate: string, targetCalories: number): WeeklyTrendPoint[] {
   const byDate = new Map<string, MacroTotals>();
 
@@ -540,7 +547,9 @@ export const openCalorieDashboard = {
       content: [
         {
           type: "text" as const,
-          text: `Opened the calorie dashboard for ${payload.dashboard.date}.`,
+          text:
+            `Opened the calorie dashboard for ${payload.dashboard.date}. ` +
+            dashboardSummaryLine(payload.dashboard),
         },
       ],
     };
@@ -566,7 +575,9 @@ export const loadDaySnapshot = {
       content: [
         {
           type: "text" as const,
-          text: `Loaded the dashboard snapshot for ${payload.dashboard.date}.`,
+          text:
+            `Loaded the dashboard snapshot for ${payload.dashboard.date}. ` +
+            dashboardSummaryLine(payload.dashboard),
         },
       ],
     };
@@ -591,7 +602,9 @@ export const logMealFromText = {
       content: [
         {
           type: "text" as const,
-          text: result.reused ? `Meal already logged: ${result.label}.` : `Logged ${result.label}.`,
+          text: result.reused
+            ? `Meal already logged: ${result.label}. ${dashboardSummaryLine(result.payload.dashboard)}`
+            : `Logged ${result.label}. ${dashboardSummaryLine(result.payload.dashboard)}`,
         },
       ],
     };
@@ -651,7 +664,9 @@ export const logFoodSelection = {
       content: [
         {
           type: "text" as const,
-          text: result.reused ? `${result.label} was already added.` : `Added ${result.label}.`,
+          text: result.reused
+            ? `${result.label} was already added. ${dashboardSummaryLine(result.payload.dashboard)}`
+            : `Added ${result.label}. ${dashboardSummaryLine(result.payload.dashboard)}`,
         },
       ],
     };
@@ -684,8 +699,8 @@ export const updateGoalTargets = {
         {
           type: "text" as const,
           text: result.fiberSaved
-            ? "Updated calorie and macro targets."
-            : "Updated calorie and macro targets. Fiber remains on the default target in this build.",
+            ? `Updated calorie and macro targets. ${dashboardSummaryLine(result.payload.dashboard)}`
+            : `Updated calorie and macro targets. Fiber remains on the default target in this build. ${dashboardSummaryLine(result.payload.dashboard)}`,
         },
       ],
     };
@@ -710,7 +725,9 @@ export const removeMealEntry = {
       content: [
         {
           type: "text" as const,
-          text: result.removed ? "Removed the meal entry." : "The meal entry was not found.",
+          text: result.removed
+            ? `Removed the meal entry. ${dashboardSummaryLine(result.payload.dashboard)}`
+            : "The meal entry was not found.",
         },
       ],
     };
@@ -736,8 +753,8 @@ export const analyzeMealPhoto = {
         {
           type: "text" as const,
           text: result.pending
-            ? "Saved the meal photo as a pending entry."
-            : "Analyzed the meal photo.",
+            ? `Saved the meal photo as a pending entry. ${dashboardSummaryLine(result.payload.dashboard)}`
+            : `Analyzed the meal photo. ${dashboardSummaryLine(result.payload.dashboard)}`,
         },
       ],
     };
