@@ -253,17 +253,17 @@ function createAppServer(): McpServer {
 
 // ─── HTTP server ─────────────────────────────────────────────────────
 
-const httpServer = createServer(async (req, res) => {
+export default async function handler(req: any, res: any) {
   if (!req.url) {
     res.writeHead(400).end("Missing URL");
     return;
   }
 
-  const url = new URL(req.url, `http://${req.headers.host ?? "localhost"}`);
+  const url = new URL(req.url, `http://${req.headers?.host ?? "localhost"}`);
 
   if (req.method === "GET" && url.pathname === "/") {
     res.writeHead(200, { "content-type": "text/plain" });
-    res.end(`Calorie MCP server running at http://localhost:${PORT}${MCP_PATH}`);
+    res.end(`Calorie MCP server running at http://${req.headers?.host ?? "localhost"}${MCP_PATH}`);
     return;
   }
 
@@ -296,7 +296,7 @@ const httpServer = createServer(async (req, res) => {
 
     try {
       await server.connect(transport);
-      await transport.handleRequest(req, res);
+      await transport.handleRequest(req as any, res as any);
       return;
     } catch (error) {
       console.error("Failed to handle MCP request", error);
@@ -308,8 +308,11 @@ const httpServer = createServer(async (req, res) => {
   }
 
   res.writeHead(404).end("Not found");
-});
+}
 
-httpServer.listen(PORT, () => {
-  console.log(`Calorie MCP server listening on http://localhost:${PORT}${MCP_PATH}`);
-});
+if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+  const httpServer = createServer(handler);
+  httpServer.listen(PORT, () => {
+    console.log(`Calorie MCP server listening on http://localhost:${PORT}${MCP_PATH}`);
+  });
+}
