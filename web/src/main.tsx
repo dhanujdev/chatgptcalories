@@ -425,8 +425,16 @@ function App() {
   const bridge = useMcpBridge(applyPayload);
 
   useEffect(() => {
-    let attempts = 0;
     let cancelled = false;
+    let pollAttempts = 0;
+    let pollTimer: number | null = null;
+
+    const stopPolling = () => {
+      if (pollTimer != null) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
 
     const hydrateFromHost = (globals?: Partial<OpenAiBridge>) => {
       if (cancelled) {
@@ -446,9 +454,8 @@ function App() {
         setActiveDate(hostState.activeDate ?? todayDate());
       }
 
-      if (!payload && attempts < 10) {
-        attempts += 1;
-        window.setTimeout(hydrateFromHost, 120);
+      if (payload) {
+        stopPolling();
       }
     };
 
@@ -461,9 +468,17 @@ function App() {
       passive: true,
     });
     hydrateFromHost();
+    pollTimer = window.setInterval(() => {
+      pollAttempts += 1;
+      hydrateFromHost();
+      if (pollAttempts >= 120) {
+        stopPolling();
+      }
+    }, 250);
 
     return () => {
       cancelled = true;
+      stopPolling();
       window.removeEventListener("openai:set_globals", handleSetGlobals);
     };
   }, []);
