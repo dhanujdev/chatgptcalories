@@ -5,6 +5,10 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    "process.env": JSON.stringify({ NODE_ENV: "production" }),
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
   build: {
     outDir: resolve(__dirname, "web/dist"),
     emptyOutDir: true,
@@ -17,4 +21,3 @@ export default defineConfig({
     },
   },
 });
-
