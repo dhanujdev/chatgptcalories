@@ -1,12 +1,4 @@
-import React, {
-  startTransition,
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import type {
@@ -58,6 +50,8 @@ type OpenAiBridge = {
   toolOutput?: ToolPayload | ToolResultEnvelope | null;
   widgetState?: WidgetState | null;
   locale?: string;
+  callTool?: (name: string, args: Record<string, unknown>) => Promise<unknown>;
+  sendFollowUpMessage?: (args: { prompt: string; scrollToBottom?: boolean }) => Promise<void>;
   uploadFile?: (file: File) => Promise<{ fileId: string }>;
   getFileDownloadUrl?: (args: { fileId: string }) => Promise<{ downloadUrl: string }>;
   requestDisplayMode?: (args: {
@@ -149,7 +143,7 @@ function useMcpBridge(onPayload: (payload: ToolPayload) => void) {
     new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>()
   );
   const nextIdRef = useRef(1);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => typeof window.openai?.callTool === "function");
 
   useEffect(() => {
     handlerRef.current = onPayload;
@@ -189,9 +183,19 @@ function useMcpBridge(onPayload: (payload: ToolPayload) => void) {
     };
 
     window.addEventListener("message", handleMessage, { passive: true });
+    const handleSetGlobals = (event: Event) => {
+      const customEvent = event as SetGlobalsEvent;
+      if (typeof customEvent.detail?.globals?.callTool === "function") {
+        setReady(true);
+      }
+    };
+    window.addEventListener("openai:set_globals", handleSetGlobals, { passive: true });
 
     if (window.parent === window) {
-      return () => window.removeEventListener("message", handleMessage);
+      return () => {
+        window.removeEventListener("message", handleMessage);
+        window.removeEventListener("openai:set_globals", handleSetGlobals);
+      };
     }
 
     const rpcRequest = (method: string, params?: unknown) =>
@@ -217,17 +221,23 @@ function useMcpBridge(onPayload: (payload: ToolPayload) => void) {
         setReady(true);
       })
       .catch(() => {
-        setReady(false);
+        setReady(typeof window.openai?.callTool === "function");
       });
 
     const pending = pendingRef.current;
     return () => {
       window.removeEventListener("message", handleMessage);
+      window.removeEventListener("openai:set_globals", handleSetGlobals);
       pending.clear();
     };
   }, []);
 
   const callTool = async (name: string, args: Record<string, unknown>) => {
+    if (window.openai?.callTool) {
+      const result = await window.openai.callTool(name, args);
+      return result as { structuredContent?: ToolPayload };
+    }
+
     if (ready && window.parent !== window) {
       const id = nextIdRef.current++;
       const payload: RpcRequest = {
@@ -250,6 +260,11 @@ function useMcpBridge(onPayload: (payload: ToolPayload) => void) {
   };
 
   const sendFollowUp = async (prompt: string) => {
+    if (window.openai?.sendFollowUpMessage) {
+      await window.openai.sendFollowUpMessage({ prompt, scrollToBottom: true });
+      return;
+    }
+
     if (ready && window.parent !== window) {
       const message: RpcNotification = {
         jsonrpc: "2.0",
@@ -411,18 +426,16 @@ function App() {
   const locale = window.openai?.locale ?? "en-US";
 
   const applyPayload = useCallback((payload: ToolPayload) => {
-    startTransition(() => {
-      if (payload.kind === "dashboard") {
-        setDashboard(payload.dashboard);
-        setActiveDate(payload.dashboard.date);
-        setGoalDraft(payload.dashboard.summary.targets);
-        return;
-      }
+    if (payload.kind === "dashboard") {
+      setDashboard(payload.dashboard);
+      setActiveDate(payload.dashboard.date);
+      setGoalDraft(payload.dashboard.summary.targets);
+      return;
+    }
 
-      if (payload.kind === "catalogSearch") {
-        setCatalogResults(payload.results);
-      }
-    });
+    if (payload.kind === "catalogSearch") {
+      setCatalogResults(payload.results);
+    }
   }, []);
 
   const bridge = useMcpBridge(applyPayload);
