@@ -101,9 +101,8 @@ function fraction(value: number, target: number): number {
 }
 
 function extractDashboard(payload: ToolPayload | null | undefined): DashboardSnapshot | null {
-  if (!payload) return null;
+  if (!payload || typeof payload !== "object") return null;
   if (payload.kind === "dashboard" && payload.dashboard) return payload.dashboard;
-  // Some host versions pass the dashboard object directly on toolOutput
   if ("dashboard" in payload && (payload as Record<string, unknown>).dashboard) {
     return (payload as Record<string, unknown>).dashboard as DashboardSnapshot;
   }
@@ -111,21 +110,25 @@ function extractDashboard(payload: ToolPayload | null | undefined): DashboardSna
 }
 
 function extractSearchResults(payload: ToolPayload | null | undefined): CatalogResult[] {
-  return payload?.kind === "catalogSearch" ? payload.results : [];
+  if (!payload || typeof payload !== "object") return [];
+  return payload.kind === "catalogSearch" ? payload.results : [];
 }
 
 function unwrapToolPayload(
-  payload: ToolPayload | ToolResultEnvelope | null | undefined
+  raw: unknown
 ): ToolPayload | null {
-  if (!payload) {
+  if (!raw || typeof raw !== "object") return null;
+  const payload = raw as Record<string, unknown>;
+
+  if ("structuredContent" in payload) {
+    const sc = payload.structuredContent;
+    if (sc && typeof sc === "object") return sc as ToolPayload;
     return null;
   }
 
-  if ("structuredContent" in payload) {
-    return payload.structuredContent ?? null;
-  }
+  if ("kind" in payload) return payload as ToolPayload;
 
-  return payload;
+  return null;
 }
 
 function macroLabel(macro: keyof MacroTotals): string {
@@ -455,18 +458,20 @@ function App() {
 
     const tryHydrate = () => {
       if (hydratedRef.current) return;
-      const payload = unwrapToolPayload(window.openai?.toolOutput);
-      if (payload) {
-        applyPayload(payload);
-        hydratedRef.current = true;
-        cleanup();
-      }
-      const ws = window.openai?.widgetState as WidgetState | null;
-      if (ws) {
-        setComposer(ws.composer ?? "");
-        setMealSlot(ws.mealSlot ?? "lunch");
-        setActiveDate(ws.activeDate ?? todayDate());
-      }
+      try {
+        const payload = unwrapToolPayload(window.openai?.toolOutput);
+        if (payload) {
+          applyPayload(payload);
+          hydratedRef.current = true;
+          cleanup();
+        }
+        const ws = window.openai?.widgetState as WidgetState | null;
+        if (ws) {
+          setComposer(ws.composer ?? "");
+          setMealSlot(ws.mealSlot ?? "lunch");
+          setActiveDate(ws.activeDate ?? todayDate());
+        }
+      } catch { /* host returned unexpected data shape */ }
     };
 
     const onSetGlobals = () => tryHydrate();
