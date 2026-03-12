@@ -421,6 +421,40 @@ function App() {
   const bridge = useMcpBridge(applyPayload);
 
   useEffect(() => {
+    let attempts = 0;
+    let cancelled = false;
+
+    const hydrateFromHost = () => {
+      if (cancelled) {
+        return;
+      }
+
+      const payload = unwrapToolPayload(window.openai?.toolOutput);
+      if (payload) {
+        applyPayload(payload);
+      }
+
+      const hostState = window.openai?.widgetState;
+      if (hostState) {
+        setComposer(hostState.composer ?? "");
+        setMealSlot(hostState.mealSlot ?? "lunch");
+        setActiveDate(hostState.activeDate ?? todayDate());
+      }
+
+      if (!payload && attempts < 10) {
+        attempts += 1;
+        window.setTimeout(hydrateFromHost, 120);
+      }
+    };
+
+    hydrateFromHost();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const nextState: WidgetState = { activeDate, mealSlot, composer };
     void window.openai?.setWidgetState?.(nextState);
   }, [activeDate, mealSlot, composer]);
