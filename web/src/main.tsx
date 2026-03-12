@@ -1,4 +1,4 @@
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import type {
@@ -141,34 +141,6 @@ function macroLabel(macro: keyof MacroTotals): string {
     default:
       return "Calories";
   }
-}
-
-/**
- * Reactive reader for window.openai globals — matches the official OpenAI
- * Apps SDK pattern (useSyncExternalStore).  Re-renders the component whenever
- * the host fires an openai:set_globals event that includes the requested key.
- */
-function useOpenAiGlobal<K extends keyof OpenAiBridge>(key: K): OpenAiBridge[K] | null {
-  return useSyncExternalStore(
-    (onChange) => {
-      const handler = (event: Event) => {
-        const detail = (event as SetGlobalsEvent).detail;
-        if (detail?.globals && key in detail.globals) {
-          onChange();
-        }
-      };
-      window.addEventListener("openai:set_globals", handler, { passive: true });
-      // Some host versions set properties without firing set_globals.
-      // Periodic onChange is cheap — React only re-renders if the snapshot changed.
-      const timer = window.setInterval(onChange, 200);
-      return () => {
-        window.removeEventListener("openai:set_globals", handler);
-        window.clearInterval(timer);
-      };
-    },
-    () => window.openai?.[key] ?? null,
-    () => null
-  );
 }
 
 function useMcpBridge(onPayload: (payload: ToolPayload) => void) {
@@ -431,15 +403,6 @@ function MealSection({
 function App() {
   const initialPayload = unwrapToolPayload(window.openai?.toolOutput);
   const initialDashboard = extractDashboard(initialPayload);
-
-  // Debug: log what the host gave us on first render
-  console.log("[calories] mount", {
-    hasOpenai: !!window.openai,
-    toolOutput: window.openai?.toolOutput,
-    initialPayload,
-    initialDashboard,
-  });
-
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(initialDashboard);
   const [catalogResults, setCatalogResults] = useState<CatalogResult[]>(
     extractSearchResults(initialPayload)
@@ -483,28 +446,43 @@ function App() {
 
   const bridge = useMcpBridge(applyPayload);
 
-  // Reactive hydration via useSyncExternalStore (matches official OpenAI SDK
-  // pattern).  Re-renders whenever the host sets toolOutput on window.openai,
-  // which is the primary delivery path on mobile ChatGPT.
-  const hostToolOutput = useOpenAiGlobal("toolOutput");
-  const hostWidgetState = useOpenAiGlobal("widgetState") as WidgetState | null;
+  // Hydrate from host: listen for set_globals events + poll window.openai.
+  // Stops once a dashboard payload is found.
+  const hydratedRef = useRef(!!initialDashboard);
 
   useEffect(() => {
-    console.log("[calories] hostToolOutput changed", hostToolOutput);
-    const payload = unwrapToolPayload(hostToolOutput as ToolPayload | ToolResultEnvelope | null);
-    if (payload) {
-      console.log("[calories] applying payload from host", payload.kind);
-      applyPayload(payload);
-    }
-  }, [hostToolOutput, applyPayload]);
+    if (hydratedRef.current) return;
 
-  useEffect(() => {
-    if (hostWidgetState) {
-      setComposer(hostWidgetState.composer ?? "");
-      setMealSlot(hostWidgetState.mealSlot ?? "lunch");
-      setActiveDate(hostWidgetState.activeDate ?? todayDate());
-    }
-  }, [hostWidgetState]);
+    const tryHydrate = () => {
+      if (hydratedRef.current) return;
+      const payload = unwrapToolPayload(window.openai?.toolOutput);
+      if (payload) {
+        applyPayload(payload);
+        hydratedRef.current = true;
+        cleanup();
+      }
+      const ws = window.openai?.widgetState as WidgetState | null;
+      if (ws) {
+        setComposer(ws.composer ?? "");
+        setMealSlot(ws.mealSlot ?? "lunch");
+        setActiveDate(ws.activeDate ?? todayDate());
+      }
+    };
+
+    const onSetGlobals = () => tryHydrate();
+    window.addEventListener("openai:set_globals", onSetGlobals, { passive: true });
+    const timer = window.setInterval(tryHydrate, 300);
+
+    const cleanup = () => {
+      window.removeEventListener("openai:set_globals", onSetGlobals);
+      window.clearInterval(timer);
+    };
+
+    // Check immediately in case toolOutput is already set
+    tryHydrate();
+
+    return cleanup;
+  }, [applyPayload]);
 
   useEffect(() => {
     const nextState: WidgetState = { activeDate, mealSlot, composer };
@@ -564,12 +542,10 @@ function App() {
       setStatus(nextStatus);
       try {
         const response = await bridge.callTool(name, args);
-        console.log("[calories] callTool response", name, response);
         // RPC path returns { structuredContent }, modern bridge may return
         // { result: string } or the payload directly — try all shapes.
         const payload = unwrapToolPayload(response as ToolPayload | ToolResultEnvelope | null);
         if (payload?.kind) {
-          console.log("[calories] applying callTool payload", payload.kind);
           applyPayload(payload);
         }
         setStatus("Synced");

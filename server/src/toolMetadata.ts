@@ -1,4 +1,4 @@
-export const WIDGET_URI = "ui://widget/calorie-command-v9.html";
+export const WIDGET_URI = "ui://widget/calorie-command-v10.html";
 
 export function openDashboardToolMeta(widgetUri: string = WIDGET_URI) {
   return {
