@@ -1,4 +1,4 @@
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 
 import type {
@@ -135,6 +135,28 @@ function macroLabel(macro: keyof MacroTotals): string {
     default:
       return "Calories";
   }
+}
+
+/**
+ * Reactive reader for window.openai globals — matches the official OpenAI
+ * Apps SDK pattern (useSyncExternalStore).  Re-renders the component whenever
+ * the host fires an openai:set_globals event that includes the requested key.
+ */
+function useOpenAiGlobal<K extends keyof OpenAiBridge>(key: K): OpenAiBridge[K] | null {
+  return useSyncExternalStore(
+    (onChange) => {
+      const handler = (event: Event) => {
+        const detail = (event as SetGlobalsEvent).detail;
+        if (detail?.globals && key in detail.globals) {
+          onChange();
+        }
+      };
+      window.addEventListener("openai:set_globals", handler, { passive: true });
+      return () => window.removeEventListener("openai:set_globals", handler);
+    },
+    () => window.openai?.[key] ?? null,
+    () => null
+  );
 }
 
 function useMcpBridge(onPayload: (payload: ToolPayload) => void) {
@@ -440,64 +462,26 @@ function App() {
 
   const bridge = useMcpBridge(applyPayload);
 
+  // Reactive hydration via useSyncExternalStore (matches official OpenAI SDK
+  // pattern).  Re-renders whenever the host sets toolOutput on window.openai,
+  // which is the primary delivery path on mobile ChatGPT.
+  const hostToolOutput = useOpenAiGlobal("toolOutput");
+  const hostWidgetState = useOpenAiGlobal("widgetState") as WidgetState | null;
+
   useEffect(() => {
-    let cancelled = false;
-    let pollAttempts = 0;
-    let pollTimer: number | null = null;
+    const payload = unwrapToolPayload(hostToolOutput as ToolPayload | ToolResultEnvelope | null);
+    if (payload) {
+      applyPayload(payload);
+    }
+  }, [hostToolOutput, applyPayload]);
 
-    const stopPolling = () => {
-      if (pollTimer != null) {
-        window.clearInterval(pollTimer);
-        pollTimer = null;
-      }
-    };
-
-    const hydrateFromHost = (globals?: Partial<OpenAiBridge>) => {
-      if (cancelled) {
-        return;
-      }
-
-      const source = globals ?? window.openai;
-      const payload = unwrapToolPayload(source?.toolOutput);
-      if (payload) {
-        applyPayload(payload);
-      }
-
-      const hostState = source?.widgetState;
-      if (hostState) {
-        setComposer(hostState.composer ?? "");
-        setMealSlot(hostState.mealSlot ?? "lunch");
-        setActiveDate(hostState.activeDate ?? todayDate());
-      }
-
-      if (payload) {
-        stopPolling();
-      }
-    };
-
-    const handleSetGlobals = (event: Event) => {
-      const customEvent = event as SetGlobalsEvent;
-      hydrateFromHost(customEvent.detail?.globals);
-    };
-
-    window.addEventListener("openai:set_globals", handleSetGlobals, {
-      passive: true,
-    });
-    hydrateFromHost();
-    pollTimer = window.setInterval(() => {
-      pollAttempts += 1;
-      hydrateFromHost();
-      if (pollAttempts >= 120) {
-        stopPolling();
-      }
-    }, 250);
-
-    return () => {
-      cancelled = true;
-      stopPolling();
-      window.removeEventListener("openai:set_globals", handleSetGlobals);
-    };
-  }, [applyPayload]);
+  useEffect(() => {
+    if (hostWidgetState) {
+      setComposer(hostWidgetState.composer ?? "");
+      setMealSlot(hostWidgetState.mealSlot ?? "lunch");
+      setActiveDate(hostWidgetState.activeDate ?? todayDate());
+    }
+  }, [hostWidgetState]);
 
   useEffect(() => {
     const nextState: WidgetState = { activeDate, mealSlot, composer };
