@@ -37,10 +37,28 @@ import {
 } from "./widgetTools.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(__dirname, "..", "..");
 const WIDGET_URI = "ui://widget/calorie-command-v3.html";
 const PORT = Number(process.env.PORT ?? 8787);
 const MCP_PATH = "/mcp";
+
+function resolveRootDir(startDir: string) {
+  let current = startDir;
+  for (let depth = 0; depth < 6; depth += 1) {
+    if (existsSync(path.join(current, "web", "dist"))) {
+      return current;
+    }
+
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  return path.resolve(startDir, "..", "..");
+}
+
+const ROOT_DIR = resolveRootDir(__dirname);
 
 // ─── Widget bundle ───────────────────────────────────────────────────
 
