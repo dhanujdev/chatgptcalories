@@ -491,7 +491,7 @@ button {
   }
 }
 
-@media (max-width: 920px) {
+@media (max-width: 760px) {
   .hero,
   .grid,
   .meal-board__grid,

@@ -31,9 +31,9 @@ import {
   searchFoodCatalogTool,
   updateGoalTargets,
 } from "./widgetTools.js";
+import { openDashboardToolMeta, WIDGET_URI } from "./toolMetadata.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const WIDGET_URI = "ui://widget/calorie-command-v6.html";
 const PORT = Number(process.env.PORT ?? 8787);
 const MCP_PATH = "/mcp";
 
@@ -160,9 +160,7 @@ function createAppServer(): McpServer {
       inputSchema: openCalorieDashboard.inputSchema,
       annotations: openCalorieDashboard.annotations,
       _meta: {
-        ui: { resourceUri: WIDGET_URI, visibility: ["model"] },
-        "openai/outputTemplate": WIDGET_URI,
-        ...toolStatus("Opening calorie dashboard", "Dashboard ready"),
+        ...openDashboardToolMeta(WIDGET_URI),
       },
     },
     openCalorieDashboard.execute
