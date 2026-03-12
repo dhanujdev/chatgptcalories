@@ -1,7 +1,7 @@
 node_modules
 dist
 web/dist
+coverage
 data/*.json
 .env
 .env.*
-
