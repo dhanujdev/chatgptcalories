@@ -1,8 +1,8 @@
 import handler from "../server/src/index.js";
 
-// Vercel Serverless Function Config
+// Vercel Serverless Function Config — Node.js runtime with streaming
 export const config = {
-    runtime: 'edge',
+    supportsResponseStreaming: true,
 };
 
 export default handler;

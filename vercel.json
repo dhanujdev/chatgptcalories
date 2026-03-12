@@ -2,17 +2,18 @@
     "version": 2,
     "functions": {
         "api/index.ts": {
-            "includeFiles": "web/dist/**"
+            "includeFiles": "web/dist/**",
+            "maxDuration": 60
         }
     },
     "rewrites": [
         {
             "source": "/mcp",
-            "destination": "/api/index.ts"
+            "destination": "/api"
         },
         {
             "source": "/",
-            "destination": "/api/index.ts"
+            "destination": "/api"
         }
     ]
 }

@@ -260,6 +260,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const url = new URL(req.url, `http://${req.headers?.host ?? "localhost"}`);
+  const isMcpPath = url.pathname === MCP_PATH || url.pathname === "/api" || url.pathname === "/api/index";
 
   if (req.method === "GET" && url.pathname === "/") {
     res.writeHead(200, { "content-type": "text/plain" });
@@ -267,7 +268,7 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  if (req.method === "OPTIONS" && url.pathname.startsWith(MCP_PATH)) {
+  if (req.method === "OPTIONS" && isMcpPath) {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -279,7 +280,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const allowedMethods = new Set(["GET", "POST", "DELETE"]);
-  if (url.pathname === MCP_PATH && req.method && allowedMethods.has(req.method)) {
+  if (isMcpPath && req.method && allowedMethods.has(req.method)) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Expose-Headers", "Mcp-Session-Id");
 
