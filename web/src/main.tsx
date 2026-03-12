@@ -394,6 +394,7 @@ function App() {
   );
   const [status, setStatus] = useState("Ready");
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const didAutoHydrateRef = useRef(false);
   const [goalDraft, setGoalDraft] = useState<GoalTargets>(
     initialDashboard?.summary.targets ?? {
       calories: 2200,
@@ -557,6 +558,28 @@ function App() {
     }
   }
 
+  async function hydrateDashboard(force = false) {
+    if (!bridge.ready) {
+      setStatus("Bridge connecting");
+      return;
+    }
+    if (!force && didAutoHydrateRef.current) {
+      return;
+    }
+
+    didAutoHydrateRef.current = true;
+    await runTool("hydrate", "Loading dashboard", "open_calorie_dashboard", {
+      date: activeDate,
+    });
+  }
+
+  useEffect(() => {
+    if (dashboard || !bridge.ready) {
+      return;
+    }
+    void hydrateDashboard();
+  }, [dashboard, bridge.ready, activeDate]);
+
   async function handleQuickLog() {
     if (!composer.trim()) {
       return;
@@ -671,6 +694,17 @@ function App() {
           <span className="eyebrow">ChatGPT calories</span>
           <h1>Open the dashboard from ChatGPT to hydrate the widget.</h1>
           <p>This shell is ready, but it needs a tool result to render the calorie tracker.</p>
+          <div className="empty-state__actions">
+            <button
+              type="button"
+              className="cta"
+              disabled={busyKey === "hydrate" || !bridge.ready}
+              onClick={() => void hydrateDashboard(true)}
+            >
+              {busyKey === "hydrate" ? "Loading..." : "Load dashboard"}
+            </button>
+          </div>
+          <p className="empty-state__hint">{bridge.ready ? status : "Bridge connecting"}</p>
         </div>
       </main>
     );

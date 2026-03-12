@@ -95,6 +95,16 @@ button {
   padding: 28px;
 }
 
+.empty-state__actions {
+  margin-top: 16px;
+}
+
+.empty-state__hint {
+  margin-top: 10px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
@@ -494,4 +504,3 @@ button {
     height: 172px;
   }
 }
-
