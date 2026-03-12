@@ -1,4 +1,8 @@
 import handler from "../server/src/index.js";
 
-// Vercel Serverless Function entry point
+// Vercel Serverless Function Config
+export const config = {
+    runtime: 'edge',
+};
+
 export default handler;
