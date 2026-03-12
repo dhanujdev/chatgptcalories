@@ -24,10 +24,21 @@ import { logWeight, logWeightInput } from "../tools/logWeight.js";
 import { retrieveAgentContext, retrieveAgentContextInput } from "../tools/retrieveAgentContext.js";
 import { saveMemoryFact, saveMemoryFactInput } from "../tools/saveMemoryFact.js";
 import { getMemoryDashboard, getMemoryDashboardInput } from "../tools/getMemoryDashboard.js";
+import {
+  analyzeMealPhoto,
+  analyzeMealPhotoInput,
+  loadDaySnapshot,
+  logFoodSelection,
+  logMealFromText,
+  openCalorieDashboard,
+  removeMealEntry,
+  searchFoodCatalogTool,
+  updateGoalTargets,
+} from "./widgetTools.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
-const WIDGET_URI = "ui://widget/calorie-command-v1.html";
+const WIDGET_URI = "ui://widget/calorie-command-v2.html";
 const PORT = Number(process.env.PORT ?? 8787);
 const MCP_PATH = "/mcp";
 
@@ -115,6 +126,96 @@ function createAppServer(): McpServer {
       ],
     })
   );
+
+  registerAppTool(server, openCalorieDashboard.name, {
+    title: openCalorieDashboard.title,
+    description: openCalorieDashboard.description,
+    inputSchema: openCalorieDashboard.inputSchema,
+    annotations: openCalorieDashboard.annotations,
+    _meta: {
+      ui: { resourceUri: WIDGET_URI, visibility: ["model"] },
+      "openai/outputTemplate": WIDGET_URI,
+      ...toolStatus("Opening calorie dashboard", "Dashboard ready"),
+    },
+  }, openCalorieDashboard.execute);
+
+  registerAppTool(server, loadDaySnapshot.name, {
+    title: loadDaySnapshot.title,
+    description: loadDaySnapshot.description,
+    inputSchema: loadDaySnapshot.inputSchema,
+    annotations: loadDaySnapshot.annotations,
+    _meta: {
+      ui: { visibility: ["model", "app"] },
+      ...toolStatus("Loading day snapshot", "Snapshot ready"),
+    },
+  }, loadDaySnapshot.execute);
+
+  registerAppTool(server, logMealFromText.name, {
+    title: logMealFromText.title,
+    description: logMealFromText.description,
+    inputSchema: logMealFromText.inputSchema,
+    annotations: logMealFromText.annotations,
+    _meta: {
+      ui: { visibility: ["model", "app"] },
+      ...toolStatus("Logging meal", "Meal logged"),
+    },
+  }, logMealFromText.execute);
+
+  registerAppTool(server, searchFoodCatalogTool.name, {
+    title: searchFoodCatalogTool.title,
+    description: searchFoodCatalogTool.description,
+    inputSchema: searchFoodCatalogTool.inputSchema,
+    annotations: searchFoodCatalogTool.annotations,
+    _meta: {
+      ui: { visibility: ["app"] },
+      ...toolStatus("Searching foods", "Search complete"),
+    },
+  }, searchFoodCatalogTool.execute);
+
+  registerAppTool(server, logFoodSelection.name, {
+    title: logFoodSelection.title,
+    description: logFoodSelection.description,
+    inputSchema: logFoodSelection.inputSchema,
+    annotations: logFoodSelection.annotations,
+    _meta: {
+      ui: { visibility: ["model", "app"] },
+      ...toolStatus("Adding food", "Food added"),
+    },
+  }, logFoodSelection.execute);
+
+  registerAppTool(server, updateGoalTargets.name, {
+    title: updateGoalTargets.title,
+    description: updateGoalTargets.description,
+    inputSchema: updateGoalTargets.inputSchema,
+    annotations: updateGoalTargets.annotations,
+    _meta: {
+      ui: { visibility: ["model", "app"] },
+      ...toolStatus("Saving targets", "Targets updated"),
+    },
+  }, updateGoalTargets.execute);
+
+  registerAppTool(server, removeMealEntry.name, {
+    title: removeMealEntry.title,
+    description: removeMealEntry.description,
+    inputSchema: removeMealEntry.inputSchema,
+    annotations: removeMealEntry.annotations,
+    _meta: {
+      ui: { visibility: ["model", "app"] },
+      ...toolStatus("Removing entry", "Entry removed"),
+    },
+  }, removeMealEntry.execute);
+
+  registerAppTool(server, analyzeMealPhoto.name, {
+    title: analyzeMealPhoto.title,
+    description: analyzeMealPhoto.description,
+    inputSchema: analyzeMealPhotoInput,
+    annotations: analyzeMealPhoto.annotations,
+    _meta: {
+      ui: { visibility: ["app"] },
+      "openai/fileParams": ["photo"],
+      ...toolStatus("Saving meal photo", "Photo saved"),
+    },
+  }, analyzeMealPhoto.execute);
 
   // ── Agent context (the key tool) ──
   registerAppTool(server, retrieveAgentContext.name, {

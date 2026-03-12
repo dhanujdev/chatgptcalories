@@ -55,14 +55,16 @@ export async function getDayEntries(
 }
 
 export async function removeFoodEntry(entryId: string, uid?: string): Promise<boolean> {
-    const { error, count } = await supabase
+    const { data, error } = await supabase
         .from("food_entries")
         .update({ status: "deleted", deleted_at: new Date().toISOString() })
         .eq("id", entryId)
-        .eq("user_id", userId(uid));
+        .eq("user_id", userId(uid))
+        .select("id")
+        .maybeSingle();
 
     if (error) throw new Error(`removeFoodEntry: ${error.message}`);
-    return (count ?? 0) > 0;
+    return Boolean(data?.id);
 }
 
 export async function getWeekEntries(

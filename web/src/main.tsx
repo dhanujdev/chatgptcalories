@@ -41,6 +41,12 @@ type RpcNotification = {
   params?: unknown;
 };
 
+type ToolResultEnvelope = {
+  structuredContent?: ToolPayload | null;
+  content?: unknown;
+  _meta?: unknown;
+};
+
 type WidgetState = {
   activeDate: string;
   mealSlot: MealSlot;
@@ -48,7 +54,7 @@ type WidgetState = {
 };
 
 type OpenAiBridge = {
-  toolOutput?: ToolPayload | null;
+  toolOutput?: ToolPayload | ToolResultEnvelope | null;
   widgetState?: WidgetState | null;
   locale?: string;
   uploadFile?: (file: File) => Promise<{ fileId: string }>;
@@ -99,6 +105,18 @@ function extractDashboard(payload: ToolPayload | null | undefined): DashboardSna
 
 function extractSearchResults(payload: ToolPayload | null | undefined): CatalogResult[] {
   return payload?.kind === "catalogSearch" ? payload.results : [];
+}
+
+function unwrapToolPayload(payload: ToolPayload | ToolResultEnvelope | null | undefined): ToolPayload | null {
+  if (!payload) {
+    return null;
+  }
+
+  if ("structuredContent" in payload) {
+    return payload.structuredContent ?? null;
+  }
+
+  return payload;
 }
 
 function macroLabel(macro: keyof MacroTotals): string {
@@ -154,7 +172,10 @@ function useMcpBridge(onPayload: (payload: ToolPayload) => void) {
       }
 
       if (message.method === "ui/notifications/tool-result" && message.params) {
-        handlerRef.current(message.params as ToolPayload);
+        const payload = unwrapToolPayload(message.params as ToolPayload | ToolResultEnvelope);
+        if (payload) {
+          handlerRef.current(payload);
+        }
       }
     };
 
@@ -351,10 +372,11 @@ function MealSection({
 }
 
 function App() {
-  const initialDashboard = extractDashboard(window.openai?.toolOutput);
+  const initialPayload = unwrapToolPayload(window.openai?.toolOutput);
+  const initialDashboard = extractDashboard(initialPayload);
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(initialDashboard);
   const [catalogResults, setCatalogResults] = useState<CatalogResult[]>(
-    extractSearchResults(window.openai?.toolOutput)
+    extractSearchResults(initialPayload)
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [composer, setComposer] = useState(
@@ -415,6 +437,12 @@ function App() {
       setStatus(`Searching "${deferredQuery}"`);
       void bridge
         .callTool("search_food_catalog", { query: deferredQuery, limit: 6 })
+        .then((response) => {
+          const payload = unwrapToolPayload(response as ToolPayload | ToolResultEnvelope);
+          if (!cancelled && payload) {
+            applyPayload(payload);
+          }
+        })
         .catch(() => {
           if (!cancelled) {
             setStatus("Food search failed");
@@ -806,4 +834,3 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </React.StrictMode>
 );
-

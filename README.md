@@ -1,12 +1,12 @@
 # ChatGPT Calories
 
-`chatgpt-calories` is a greenfield ChatGPT App scaffold for calorie and macro tracking. It uses:
+`chatgpt-calories` is a ChatGPT App for calorie and macro tracking. It uses:
 
 - A Node MCP server at `/mcp`
 - A React widget rendered inside ChatGPT
 - A decoupled tool shape so the dashboard stays mounted while the widget calls tools
-- A local JSON journal store with seed data
-- Optional photo analysis through the OpenAI Responses API when `OPENAI_API_KEY` is set
+- A Supabase-backed nutrition log and goals store
+- A lightweight meal-photo capture flow that stores pending photo entries in the dashboard
 
 ## App shape
 
@@ -73,17 +73,6 @@ ngrok http 8787
 2. In ChatGPT, enable **Settings -> Apps & Connectors -> Advanced settings -> Developer Mode**.
 3. Create a new app using your public URL plus `/mcp`.
 4. Refresh the app after tool or metadata changes.
-
-## Optional photo analysis
-
-If you want the meal-photo tool to produce an estimate instead of a placeholder entry, set:
-
-```bash
-export OPENAI_API_KEY=your_key
-export OPENAI_ANALYSIS_MODEL=gpt-5.4
-```
-
-Without `OPENAI_API_KEY`, meal photos are still accepted and saved as pending entries.
 
 ## Validation ladder
 
