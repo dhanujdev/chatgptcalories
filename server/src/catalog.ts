@@ -201,6 +201,26 @@ function escapePattern(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function formatScaledServingText(item: FoodCatalogItem, servings: number): string {
+  if (servings === 1) {
+    return item.servingText;
+  }
+
+  const baseMatch = item.servingText.match(/^1\s+(.+)$/i);
+  if (!baseMatch) {
+    return `${servings} x ${item.servingText}`;
+  }
+
+  let phrase = baseMatch[1] ?? item.servingText;
+  const [singular, plural] = item.countWords ?? [];
+  if (singular) {
+    const chosen = servings === 1 ? singular : (plural ?? `${singular}s`);
+    phrase = phrase.replace(new RegExp(`\\b${escapePattern(singular)}\\b`, "i"), chosen);
+  }
+
+  return `${servings} ${phrase}`;
+}
+
 function extractCount(description: string, item: FoodCatalogItem): number {
   const numericFallback = description.match(/\b(\d+(?:\.\d+)?)\b/);
   const aliasPattern = item.aliases.map(escapePattern).join("|");
@@ -325,7 +345,7 @@ export function estimateMealFromText(
     label,
     servingText:
       matched.length === 1 && firstMatch
-        ? firstMatch.servingText
+        ? formatScaledServingText(firstMatch, estimated[0]?.servings ?? 1)
         : `${matched.length} matched foods`,
     notes:
       matched.length > 1
