@@ -1,18 +1,17 @@
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import type {
-  CatalogResult,
   DashboardSnapshot,
-  GoalTargets,
-  MacroTotals,
-  MealEntry,
-  MealGroup,
   MealSlot,
   ToolPayload,
   WeeklyTrendPoint,
 } from "../../shared/types.js";
 import "./styles.css";
+
+/* ────────────────────────────────────────────────────────────
+   RPC / Bridge types
+   ──────────────────────────────────────────────────────────── */
 
 type RpcRequest = {
   jsonrpc: "2.0";
@@ -71,6 +70,10 @@ declare global {
   }
 }
 
+/* ────────────────────────────────────────────────────────────
+   Utilities
+   ──────────────────────────────────────────────────────────── */
+
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -93,12 +96,9 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-function fraction(value: number, target: number): number {
-  if (target <= 0) {
-    return 0;
-  }
-  return clamp(value / target, 0, 1.2);
-}
+/* ────────────────────────────────────────────────────────────
+   Payload helpers
+   ──────────────────────────────────────────────────────────── */
 
 function extractDashboard(payload: ToolPayload | null | undefined): DashboardSnapshot | null {
   if (!payload || typeof payload !== "object") return null;
@@ -109,14 +109,7 @@ function extractDashboard(payload: ToolPayload | null | undefined): DashboardSna
   return null;
 }
 
-function extractSearchResults(payload: ToolPayload | null | undefined): CatalogResult[] {
-  if (!payload || typeof payload !== "object") return [];
-  return payload.kind === "catalogSearch" ? payload.results : [];
-}
-
-function unwrapToolPayload(
-  raw: unknown
-): ToolPayload | null {
+function unwrapToolPayload(raw: unknown): ToolPayload | null {
   if (!raw || typeof raw !== "object") return null;
   const payload = raw as Record<string, unknown>;
 
@@ -131,20 +124,9 @@ function unwrapToolPayload(
   return null;
 }
 
-function macroLabel(macro: keyof MacroTotals): string {
-  switch (macro) {
-    case "protein":
-      return "Protein";
-    case "carbs":
-      return "Carbs";
-    case "fat":
-      return "Fat";
-    case "fiber":
-      return "Fiber";
-    default:
-      return "Calories";
-  }
-}
+/* ────────────────────────────────────────────────────────────
+   MCP Bridge hook
+   ──────────────────────────────────────────────────────────── */
 
 function useMcpBridge(onPayload: (payload: ToolPayload) => void) {
   const handlerRef = useRef(onPayload);
@@ -183,7 +165,12 @@ function useMcpBridge(onPayload: (payload: ToolPayload) => void) {
         return;
       }
 
-      if (message.method === "ui/notifications/tool-result" && message.params) {
+      if (
+        "method" in message &&
+        message.method === "ui/notifications/tool-result" &&
+        "params" in message &&
+        message.params
+      ) {
         const payload = unwrapToolPayload(message.params as ToolPayload | ToolResultEnvelope);
         if (payload) {
           handlerRef.current(payload);
@@ -268,189 +255,136 @@ function useMcpBridge(onPayload: (payload: ToolPayload) => void) {
     throw new Error("Host bridge is unavailable.");
   };
 
-  const sendFollowUp = async (prompt: string) => {
-    if (window.openai?.sendFollowUpMessage) {
-      await window.openai.sendFollowUpMessage({ prompt, scrollToBottom: true });
-      return;
-    }
-
-    if (ready && window.parent !== window) {
-      const message: RpcNotification = {
-        jsonrpc: "2.0",
-        method: "ui/message",
-        params: {
-          role: "user",
-          content: [{ type: "text", text: prompt }],
-        },
-      };
-      window.parent.postMessage(message, "*");
-      return;
-    }
-
-    throw new Error("Follow-up messaging is unavailable.");
-  };
-
-  return { ready, callTool, sendFollowUp };
+  return { ready, callTool };
 }
 
-function MacroMeter({
-  label,
-  value,
+/* ────────────────────────────────────────────────────────────
+   Display components
+   ──────────────────────────────────────────────────────────── */
+
+function CalorieRing({
+  remaining,
+  consumed,
   target,
-  accent,
+}: {
+  remaining: number;
+  consumed: number;
+  target: number;
+}) {
+  const radius = 85;
+  const circumference = 2 * Math.PI * radius;
+  const pct = clamp(consumed / Math.max(target, 1), 0, 1);
+  const offset = circumference * (1 - pct);
+  const isOver = consumed > target;
+
+  return (
+    <div className="ring-wrap">
+      <svg viewBox="0 0 200 200">
+        <circle className="ring-track" cx="100" cy="100" r={radius} />
+        <circle
+          className={`ring-fill${isOver ? " ring-fill--over" : ""}`}
+          cx="100"
+          cy="100"
+          r={radius}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <div className="ring-center">
+        <span className="ring-center__value">{Math.round(remaining)}</span>
+        <span className="ring-center__label">kcal remaining</span>
+      </div>
+    </div>
+  );
+}
+
+function MacroCard({
+  label,
+  remaining,
+  consumed,
+  target,
+  color,
 }: {
   label: string;
-  value: number;
+  remaining: number;
+  consumed: number;
   target: number;
-  accent: string;
+  color: string;
 }) {
-  const pct = fraction(value, target);
+  const pct = clamp(consumed / Math.max(target, 1), 0, 1);
   return (
-    <div className="macro-meter">
-      <div className="macro-meter__head">
-        <span>{label}</span>
-        <strong>
-          {Math.round(value)} / {Math.round(target)}
-        </strong>
+    <div className="card macro-card">
+      <div className="macro-card__label">{label}</div>
+      <div className="macro-card__value" style={{ color }}>
+        {Math.round(remaining)}
       </div>
-      <div className="macro-meter__track">
+      <div className="macro-card__unit">g remaining</div>
+      <div className="macro-card__bar">
         <div
-          className="macro-meter__fill"
-          style={{
-            width: `${Math.min(pct, 1) * 100}%`,
-            background: accent,
-          }}
+          className="macro-card__bar-fill"
+          style={{ width: `${pct * 100}%`, background: color }}
         />
       </div>
     </div>
   );
 }
 
-function TrendBars({ points }: { points: WeeklyTrendPoint[] }) {
-  const maxValue = Math.max(...points.map((point) => Math.max(point.target, point.calories)), 1);
+function CompactTrend({ points }: { points: WeeklyTrendPoint[] }) {
+  const maxVal = Math.max(...points.map((p) => Math.max(p.target, p.calories)), 1);
   return (
-    <div className="trend">
-      {points.map((point) => (
-        <div className="trend__column" key={point.date}>
-          <div className="trend__bars">
-            <div
-              className="trend__bar trend__bar--target"
-              style={{ height: `${(point.target / maxValue) * 100}%` }}
-            />
-            <div
-              className="trend__bar trend__bar--actual"
-              style={{ height: `${(point.calories / maxValue) * 100}%` }}
-            />
-          </div>
-          <span>
-            {new Date(`${point.date}T12:00:00Z`)
-              .toLocaleDateString("en-US", { weekday: "short" })
-              .slice(0, 2)}
-          </span>
-        </div>
-      ))}
+    <div className="card trend-card">
+      <div className="trend-card__title">Last 7 days</div>
+      <div className="trend-bars">
+        {points.map((p) => {
+          const height = (p.calories / maxVal) * 100;
+          const over = p.calories > p.target;
+          return (
+            <div className="trend-col" key={p.date}>
+              <div
+                className={`trend-bar ${over ? "trend-bar--over" : "trend-bar--under"}`}
+                style={{ height: `${height}%` }}
+              />
+              <span className="trend-day">
+                {new Date(`${p.date}T12:00:00Z`)
+                  .toLocaleDateString("en-US", { weekday: "short" })
+                  .slice(0, 2)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function EntryRow({ entry, onRemove }: { entry: MealEntry; onRemove: (entry: MealEntry) => void }) {
-  return (
-    <button className="entry-row" type="button" onClick={() => onRemove(entry)}>
-      <div>
-        <p className="entry-row__title">{entry.label}</p>
-        <p className="entry-row__meta">
-          {entry.servingText}
-          {entry.photoStatus === "pending" ? " · pending photo estimate" : ""}
-        </p>
-      </div>
-      <div className="entry-row__stats">
-        <strong>{Math.round(entry.macros.calories)} kcal</strong>
-        <span>{Math.round(entry.macros.protein)}p</span>
-      </div>
-    </button>
-  );
-}
-
-function MealSection({
-  group,
-  onRemove,
-}: {
-  group: MealGroup;
-  onRemove: (entry: MealEntry) => void;
-}) {
-  return (
-    <section className="meal-section">
-      <div className="meal-section__head">
-        <div>
-          <span className="eyebrow">{group.label}</span>
-          <h3>{group.mealSlot}</h3>
-        </div>
-        <div className="meal-section__totals">
-          <strong>{Math.round(group.totals.calories)} kcal</strong>
-          <span>{Math.round(group.totals.protein)}p</span>
-        </div>
-      </div>
-      {group.entries.length === 0 ? (
-        <div className="meal-section__empty">Nothing logged yet.</div>
-      ) : (
-        <div className="meal-section__rows">
-          {group.entries.map((entry) => (
-            <EntryRow key={entry.id} entry={entry} onRemove={onRemove} />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
+/* ────────────────────────────────────────────────────────────
+   App
+   ──────────────────────────────────────────────────────────── */
 
 function App() {
   const initialPayload = unwrapToolPayload(window.openai?.toolOutput);
   const initialDashboard = extractDashboard(initialPayload);
+
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(initialDashboard);
-  const [catalogResults, setCatalogResults] = useState<CatalogResult[]>(
-    extractSearchResults(initialPayload)
-  );
-  const [searchQuery, setSearchQuery] = useState("");
-  const [composer, setComposer] = useState(window.openai?.widgetState?.composer ?? "");
-  const [mealSlot, setMealSlot] = useState<MealSlot>(
-    window.openai?.widgetState?.mealSlot ?? "lunch"
-  );
   const [activeDate, setActiveDate] = useState(
     window.openai?.widgetState?.activeDate ?? initialDashboard?.date ?? todayDate()
   );
   const [status, setStatus] = useState("Ready");
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const didAutoHydrateRef = useRef(false);
-  const [goalDraft, setGoalDraft] = useState<GoalTargets>(
-    initialDashboard?.summary.targets ?? {
-      calories: 2200,
-      protein: 180,
-      carbs: 190,
-      fat: 70,
-      fiber: 30,
-    }
-  );
 
-  const deferredQuery = useDeferredValue(searchQuery.trim());
   const locale = window.openai?.locale ?? "en-US";
 
   const applyPayload = useCallback((payload: ToolPayload) => {
     if (payload.kind === "dashboard") {
       setDashboard(payload.dashboard);
       setActiveDate(payload.dashboard.date);
-      setGoalDraft(payload.dashboard.summary.targets);
-      return;
-    }
-
-    if (payload.kind === "catalogSearch") {
-      setCatalogResults(payload.results);
     }
   }, []);
 
   const bridge = useMcpBridge(applyPayload);
 
-  // Hydrate from host: listen for set_globals events + poll window.openai.
-  // Stops once a dashboard payload is found.
+  /* Hydrate from host: poll + set_globals event, stop once dashboard found */
   const hydratedRef = useRef(!!initialDashboard);
 
   useEffect(() => {
@@ -466,12 +400,12 @@ function App() {
           cleanup();
         }
         const ws = window.openai?.widgetState as WidgetState | null;
-        if (ws) {
-          setComposer(ws.composer ?? "");
-          setMealSlot(ws.mealSlot ?? "lunch");
-          setActiveDate(ws.activeDate ?? todayDate());
+        if (ws?.activeDate) {
+          setActiveDate(ws.activeDate);
         }
-      } catch { /* host returned unexpected data shape */ }
+      } catch {
+        /* host returned unexpected data shape */
+      }
     };
 
     const onSetGlobals = () => tryHydrate();
@@ -483,63 +417,15 @@ function App() {
       window.clearInterval(timer);
     };
 
-    // Check immediately in case toolOutput is already set
     tryHydrate();
-
     return cleanup;
   }, [applyPayload]);
 
+  /* Persist widget state for host */
   useEffect(() => {
-    const nextState: WidgetState = { activeDate, mealSlot, composer };
+    const nextState: WidgetState = { activeDate, mealSlot: "lunch", composer: "" };
     void window.openai?.setWidgetState?.(nextState);
-  }, [activeDate, mealSlot, composer]);
-
-  useEffect(() => {
-    if (deferredQuery.length < 2) {
-      setCatalogResults([]);
-      return;
-    }
-
-    let cancelled = false;
-    const timeout = window.setTimeout(() => {
-      setBusyKey("search");
-      setStatus(`Searching "${deferredQuery}"`);
-      void bridge
-        .callTool("search_food_catalog", { query: deferredQuery, limit: 6 })
-        .then((response) => {
-          const payload = unwrapToolPayload(response as ToolPayload | ToolResultEnvelope);
-          if (!cancelled && payload) {
-            applyPayload(payload);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setStatus("Food search failed");
-          }
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setBusyKey((current) => (current === "search" ? null : current));
-          }
-        });
-    }, 180);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
-  }, [bridge, deferredQuery, applyPayload]);
-
-  const calorieFraction = dashboard
-    ? fraction(dashboard.summary.totals.calories, dashboard.summary.targets.calories)
-    : 0;
-
-  const heroStyle = useMemo(
-    () => ({
-      background: `conic-gradient(#ff6b3d ${Math.min(calorieFraction, 1) * 360}deg, rgba(255,107,61,0.16) 0deg)`,
-    }),
-    [calorieFraction]
-  );
+  }, [activeDate]);
 
   const runTool = useCallback(
     async (busyToken: string, nextStatus: string, name: string, args: Record<string, unknown>) => {
@@ -547,8 +433,6 @@ function App() {
       setStatus(nextStatus);
       try {
         const response = await bridge.callTool(name, args);
-        // RPC path returns { structuredContent }, modern bridge may return
-        // { result: string } or the payload directly — try all shapes.
         const payload = unwrapToolPayload(response as ToolPayload | ToolResultEnvelope | null);
         if (payload?.kind) {
           applyPayload(payload);
@@ -588,32 +472,6 @@ function App() {
     void hydrateDashboard();
   }, [dashboard, bridge.ready, hydrateDashboard]);
 
-  async function handleQuickLog() {
-    if (!composer.trim()) {
-      return;
-    }
-
-    await runTool("quick-log", "Logging meal", "log_meal_from_text", {
-      date: activeDate,
-      mealSlot,
-      description: composer.trim(),
-      dedupeKey: `${activeDate}:${mealSlot}:${composer.trim().toLowerCase()}`,
-    });
-    setComposer("");
-  }
-
-  async function handleCatalogPick(item: CatalogResult) {
-    await runTool("catalog-log", "Adding food", "log_food_selection", {
-      date: activeDate,
-      mealSlot,
-      foodId: item.id,
-      servings: 1,
-      dedupeKey: `${activeDate}:${mealSlot}:${item.id}`,
-    });
-    setSearchQuery("");
-    setCatalogResults([]);
-  }
-
   async function handleDateChange(delta: number) {
     const nextDate = shiftDate(activeDate, delta);
     await runTool("day-swap", `Loading ${nextDate}`, "load_day_snapshot", {
@@ -621,318 +479,109 @@ function App() {
     });
   }
 
-  async function handleSaveTargets() {
-    await runTool("targets", "Saving targets", "update_goal_targets", {
-      date: activeDate,
-      ...goalDraft,
-    });
-  }
-
-  async function handleRemove(entry: MealEntry) {
-    const confirmed = window.confirm(`Remove ${entry.label}?`);
-    if (!confirmed) {
-      return;
-    }
-
-    await runTool("remove-entry", "Removing entry", "remove_meal_entry", {
-      date: activeDate,
-      entryId: entry.id,
-    });
-  }
-
-  async function handlePhotoUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
-    if (!file || !window.openai?.uploadFile || !window.openai?.getFileDownloadUrl) {
-      setStatus("Photo upload is unavailable in this context");
-      return;
-    }
-
-    setBusyKey("photo");
-    setStatus("Uploading meal photo");
-    try {
-      const { fileId } = await window.openai.uploadFile(file);
-      const { downloadUrl } = await window.openai.getFileDownloadUrl({ fileId });
-      await runTool("photo", "Estimating from photo", "analyze_meal_photo", {
-        date: activeDate,
-        mealSlot,
-        photo: {
-          file_id: fileId,
-          download_url: downloadUrl,
-        },
-      });
-    } finally {
-      setBusyKey((current) => (current === "photo" ? null : current));
-    }
-  }
-
-  async function handleCoachPrompt() {
-    if (!dashboard) {
-      return;
-    }
-
-    const prompt =
-      `Coach me on the rest of ${dashboard.date}. ` +
-      `I have consumed ${Math.round(dashboard.summary.totals.calories)} calories and ${Math.round(dashboard.summary.totals.protein)}g protein. ` +
-      `I have ${Math.round(dashboard.summary.remaining.calories)} calories and ${Math.round(dashboard.summary.remaining.protein)}g protein remaining. ` +
-      `Keep it practical and specific to my logged meals.`;
-
-    try {
-      await bridge.sendFollowUp(prompt);
-      setStatus("Sent a coaching prompt to ChatGPT");
-    } catch {
-      setStatus("Coach prompt is unavailable");
-    }
-  }
-
-  async function handleFullscreen() {
-    if (!window.openai?.requestDisplayMode) {
-      setStatus("Fullscreen is unavailable");
-      return;
-    }
-
-    const result = await window.openai.requestDisplayMode({ mode: "fullscreen" });
-    setStatus(`Display mode: ${result.mode}`);
-  }
+  /* ── Empty state ───────────────────────────────────────── */
 
   if (!dashboard) {
     return (
       <main className="shell shell--empty">
-        <div className="panel empty-state">
-          <span className="eyebrow">ChatGPT calories</span>
-          <h1>Open the dashboard from ChatGPT to hydrate the widget.</h1>
-          <p>This shell is ready, but it needs a tool result to render the calorie tracker.</p>
-          <div className="empty-state__actions">
-            <button
-              type="button"
-              className="cta"
-              disabled={busyKey === "hydrate" || !bridge.ready}
-              onClick={() => void hydrateDashboard(true)}
-            >
-              {busyKey === "hydrate" ? "Loading..." : "Load dashboard"}
-            </button>
-          </div>
-          <p className="empty-state__hint">{bridge.ready ? status : "Bridge connecting"}</p>
+        <div className="card empty-card">
+          <h1>Calorie Command</h1>
+          <p>Open the dashboard from ChatGPT to see your calories.</p>
+          <button
+            type="button"
+            className="cta"
+            disabled={busyKey === "hydrate" || !bridge.ready}
+            onClick={() => void hydrateDashboard(true)}
+          >
+            {busyKey === "hydrate" ? "Loading..." : "Load dashboard"}
+          </button>
+          <p className="empty-card__hint">{bridge.ready ? status : "Connecting..."}</p>
         </div>
       </main>
     );
   }
 
+  /* ── Dashboard ─────────────────────────────────────────── */
+
+  const { summary, weeklyTrend } = dashboard;
+
   return (
     <main className="shell">
-      <div className="shell__glow shell__glow--one" />
-      <div className="shell__glow shell__glow--two" />
-
-      <section className="hero panel">
-        <div className="hero__copy">
-          <span className="eyebrow">Calorie Command</span>
-          <h1>Track faster than you think.</h1>
-          <p>{dashboard.summary.coachNote}</p>
-          <div className="hero__meta">
-            <button type="button" onClick={() => void handleDateChange(-1)}>
-              Prev
-            </button>
-            <strong>{formatDate(dashboard.date, locale)}</strong>
-            <button type="button" onClick={() => void handleDateChange(1)}>
-              Next
-            </button>
-          </div>
-        </div>
-
-        <div className="hero__ring-wrap">
-          <div className="hero__ring" style={heroStyle}>
-            <div className="hero__ring-core">
-              <span>Consumed</span>
-              <strong>{Math.round(dashboard.summary.totals.calories)}</strong>
-              <small>of {dashboard.summary.targets.calories} kcal</small>
-            </div>
-          </div>
-          <div className="hero__badges">
-            <span>{dashboard.summary.momentumLabel}</span>
-            <span>{dashboard.summary.streak} day streak</span>
-            <span>{dashboard.summary.adherenceScore}/100</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid">
-        <section className="panel composer" style={{ animationDelay: "40ms" }}>
-          <div className="section-head">
-            <div>
-              <span className="eyebrow">Quick log</span>
-              <h2>Plain English or quick add</h2>
-            </div>
-            <span className="status-pill">{bridge.ready ? status : "Bridge connecting"}</span>
-          </div>
-
-          <div className="composer__controls">
-            <select
-              value={mealSlot}
-              onChange={(event) => setMealSlot(event.target.value as MealSlot)}
-            >
-              <option value="breakfast">Breakfast</option>
-              <option value="lunch">Lunch</option>
-              <option value="dinner">Dinner</option>
-              <option value="snack">Snack</option>
-            </select>
-            <input
-              value={composer}
-              onChange={(event) => setComposer(event.target.value)}
-              placeholder="2 eggs and toast, chicken bowl, protein shake..."
-            />
-            <button
-              type="button"
-              className="cta"
-              disabled={busyKey === "quick-log" || composer.trim().length === 0}
-              onClick={() => void handleQuickLog()}
-            >
-              Log it
-            </button>
-          </div>
-
-          <div className="catalog">
-            <input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search the quick-add catalog"
-            />
-            <div className="catalog__results">
-              {catalogResults.map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  className="catalog__result"
-                  onClick={() => void handleCatalogPick(item)}
-                >
-                  <div>
-                    <strong>{item.name}</strong>
-                    <span>{item.servingText}</span>
-                  </div>
-                  <strong>{Math.round(item.macros.calories)} kcal</strong>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="composer__actions">
-            <label className="soft-button">
-              <input type="file" accept="image/*" hidden onChange={handlePhotoUpload} />
-              Add meal photo
-            </label>
-            <button type="button" className="soft-button" onClick={() => void handleCoachPrompt()}>
-              Ask coach
-            </button>
-            <button type="button" className="soft-button" onClick={() => void handleFullscreen()}>
-              Focus mode
-            </button>
-          </div>
-        </section>
-
-        <section className="panel metrics" style={{ animationDelay: "90ms" }}>
-          <div className="section-head">
-            <div>
-              <span className="eyebrow">Runway</span>
-              <h2>Macro pacing</h2>
-            </div>
-            <strong>{Math.round(dashboard.summary.remaining.calories)} kcal left</strong>
-          </div>
-
-          <div className="metric-grid">
-            <MacroMeter
-              label={macroLabel("protein")}
-              value={dashboard.summary.totals.protein}
-              target={dashboard.summary.targets.protein}
-              accent="linear-gradient(90deg, #7ac7a4, #4aa383)"
-            />
-            <MacroMeter
-              label={macroLabel("carbs")}
-              value={dashboard.summary.totals.carbs}
-              target={dashboard.summary.targets.carbs}
-              accent="linear-gradient(90deg, #f4c15d, #d8891f)"
-            />
-            <MacroMeter
-              label={macroLabel("fat")}
-              value={dashboard.summary.totals.fat}
-              target={dashboard.summary.targets.fat}
-              accent="linear-gradient(90deg, #ff9d7a, #ff6b3d)"
-            />
-            <MacroMeter
-              label={macroLabel("fiber")}
-              value={dashboard.summary.totals.fiber}
-              target={dashboard.summary.targets.fiber}
-              accent="linear-gradient(90deg, #9cb7ff, #617dff)"
-            />
-          </div>
-
-          <div className="suggestion-list">
-            {dashboard.suggestions.map((suggestion) => (
-              <div className="suggestion-list__item" key={suggestion}>
-                {suggestion}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel targets" style={{ animationDelay: "140ms" }}>
-          <div className="section-head">
-            <div>
-              <span className="eyebrow">Targets</span>
-              <h2>Tune the day</h2>
-            </div>
-          </div>
-
-          <div className="targets__grid">
-            {(["calories", "protein", "carbs", "fat", "fiber"] as const).map((key) => (
-              <label key={key}>
-                <span>{macroLabel(key)}</span>
-                <input
-                  type="number"
-                  value={goalDraft[key]}
-                  onChange={(event) =>
-                    setGoalDraft((current) => ({
-                      ...current,
-                      [key]: Number(event.target.value) || 0,
-                    }))
-                  }
-                />
-              </label>
-            ))}
-          </div>
-
-          <button type="button" className="cta" onClick={() => void handleSaveTargets()}>
-            Save targets
+      {/* Header */}
+      <header className="header">
+        <span className="header__date">{formatDate(dashboard.date, locale)}</span>
+        <div className="header__nav">
+          <button
+            type="button"
+            className="nav-btn"
+            onClick={() => void handleDateChange(-1)}
+          >
+            &larr;
           </button>
-        </section>
+          <button
+            type="button"
+            className="nav-btn"
+            onClick={() => void handleDateChange(1)}
+          >
+            &rarr;
+          </button>
+        </div>
+      </header>
 
-        <section className="panel trend-panel" style={{ animationDelay: "190ms" }}>
-          <div className="section-head">
-            <div>
-              <span className="eyebrow">Trend</span>
-              <h2>Last 7 days</h2>
-            </div>
-            <span>{dashboard.summary.streak} day streak</span>
-          </div>
-          <TrendBars points={dashboard.weeklyTrend} />
-        </section>
-
-        <section className="panel meal-board" style={{ animationDelay: "240ms" }}>
-          <div className="section-head">
-            <div>
-              <span className="eyebrow">Daily board</span>
-              <h2>Every meal in one scroll</h2>
-            </div>
-            <span>
-              {dashboard.mealGroups.reduce((sum, group) => sum + group.entries.length, 0)} entries
-            </span>
-          </div>
-
-          <div className="meal-board__grid">
-            {dashboard.mealGroups.map((group) => (
-              <MealSection key={group.mealSlot} group={group} onRemove={handleRemove} />
-            ))}
-          </div>
-        </section>
+      {/* Hero: Calorie Ring */}
+      <section className="card hero-card">
+        <CalorieRing
+          remaining={summary.remaining.calories}
+          consumed={summary.totals.calories}
+          target={summary.targets.calories}
+        />
+        <p className="hero-subtitle">
+          {Math.round(summary.totals.calories)} of {summary.targets.calories} kcal consumed
+        </p>
       </section>
+
+      {/* Macro Cards */}
+      <div className="macro-row">
+        <MacroCard
+          label="Protein"
+          remaining={summary.remaining.protein}
+          consumed={summary.totals.protein}
+          target={summary.targets.protein}
+          color="var(--protein)"
+        />
+        <MacroCard
+          label="Carbs"
+          remaining={summary.remaining.carbs}
+          consumed={summary.totals.carbs}
+          target={summary.targets.carbs}
+          color="var(--carbs)"
+        />
+        <MacroCard
+          label="Fat"
+          remaining={summary.remaining.fat}
+          consumed={summary.totals.fat}
+          target={summary.targets.fat}
+          color="var(--fat)"
+        />
+      </div>
+
+      {/* Compact Trend */}
+      <CompactTrend points={weeklyTrend} />
+
+      {/* Streak Badge */}
+      <div className="card streak-card">
+        <div className="streak-card__left">
+          <span className="streak-card__days">{summary.streak} day streak</span>
+          <span className="streak-card__momentum">{summary.momentumLabel}</span>
+        </div>
+        <div>
+          <div className="streak-card__score">{summary.adherenceScore}</div>
+          <div className="streak-card__score-label">adherence</div>
+        </div>
+      </div>
+
+      {/* Coach Note */}
+      {summary.coachNote && <p className="coach-note">{summary.coachNote}</p>}
     </main>
   );
 }
