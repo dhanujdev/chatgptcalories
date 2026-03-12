@@ -1,19 +1,19 @@
 {
-    "version": 2,
-    "functions": {
-        "api/index.ts": {
-            "includeFiles": "web/dist/**",
-            "maxDuration": 60
-        }
+  "version": 2,
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "web/dist/**",
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/mcp",
+      "destination": "/api"
     },
-    "rewrites": [
-        {
-            "source": "/mcp",
-            "destination": "/api"
-        },
-        {
-            "source": "/",
-            "destination": "/api"
-        }
-    ]
+    {
+      "source": "/",
+      "destination": "/api"
+    }
+  ]
 }

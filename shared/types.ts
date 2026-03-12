@@ -1,8 +1,32 @@
 export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
-export type EntrySource = "text" | "catalog" | "manual" | "search" | "barcode" | "photo" | "voice" | "shortcut" | "memory" | "recipe" | "saved_meal";
-export type Provenance = "exact" | "estimated" | "user_entered" | "memory_resolved" | "catalog_resolved";
+export type EntrySource =
+  | "text"
+  | "catalog"
+  | "manual"
+  | "search"
+  | "barcode"
+  | "photo"
+  | "voice"
+  | "shortcut"
+  | "memory"
+  | "recipe"
+  | "saved_meal";
+export type Provenance =
+  | "exact"
+  | "estimated"
+  | "user_entered"
+  | "memory_resolved"
+  | "catalog_resolved";
 export type ConfidenceBand = "high" | "medium" | "low";
-export type DietType = "standard" | "keto" | "paleo" | "vegan" | "vegetarian" | "mediterranean" | "high_protein" | "low_carb";
+export type DietType =
+  | "standard"
+  | "keto"
+  | "paleo"
+  | "vegan"
+  | "vegetarian"
+  | "mediterranean"
+  | "high_protein"
+  | "low_carb";
 export type MemoryCategory = "allergy" | "preference" | "goal" | "habit" | "health" | "other";
 
 export type MacroTotals = {

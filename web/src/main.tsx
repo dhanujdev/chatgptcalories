@@ -1,5 +1,6 @@
 import React, {
   startTransition,
+  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -59,7 +60,9 @@ type OpenAiBridge = {
   locale?: string;
   uploadFile?: (file: File) => Promise<{ fileId: string }>;
   getFileDownloadUrl?: (args: { fileId: string }) => Promise<{ downloadUrl: string }>;
-  requestDisplayMode?: (args: { mode: "inline" | "fullscreen" | "pip" }) => Promise<{ mode: string }>;
+  requestDisplayMode?: (args: {
+    mode: "inline" | "fullscreen" | "pip";
+  }) => Promise<{ mode: string }>;
   requestClose?: () => Promise<void> | void;
   setWidgetState?: (state: WidgetState) => Promise<void> | void;
 };
@@ -111,7 +114,9 @@ function extractSearchResults(payload: ToolPayload | null | undefined): CatalogR
   return payload?.kind === "catalogSearch" ? payload.results : [];
 }
 
-function unwrapToolPayload(payload: ToolPayload | ToolResultEnvelope | null | undefined): ToolPayload | null {
+function unwrapToolPayload(
+  payload: ToolPayload | ToolResultEnvelope | null | undefined
+): ToolPayload | null {
   if (!payload) {
     return null;
   }
@@ -215,9 +220,10 @@ function useMcpBridge(onPayload: (payload: ToolPayload) => void) {
         setReady(false);
       });
 
+    const pending = pendingRef.current;
     return () => {
       window.removeEventListener("message", handleMessage);
-      pendingRef.current.clear();
+      pending.clear();
     };
   }, []);
 
@@ -312,20 +318,18 @@ function TrendBars({ points }: { points: WeeklyTrendPoint[] }) {
               style={{ height: `${(point.calories / maxValue) * 100}%` }}
             />
           </div>
-          <span>{new Date(`${point.date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short" }).slice(0, 2)}</span>
+          <span>
+            {new Date(`${point.date}T12:00:00Z`)
+              .toLocaleDateString("en-US", { weekday: "short" })
+              .slice(0, 2)}
+          </span>
         </div>
       ))}
     </div>
   );
 }
 
-function EntryRow({
-  entry,
-  onRemove,
-}: {
-  entry: MealEntry;
-  onRemove: (entry: MealEntry) => void;
-}) {
+function EntryRow({ entry, onRemove }: { entry: MealEntry; onRemove: (entry: MealEntry) => void }) {
   return (
     <button className="entry-row" type="button" onClick={() => onRemove(entry)}>
       <div>
@@ -383,9 +387,7 @@ function App() {
     extractSearchResults(initialPayload)
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [composer, setComposer] = useState(
-    window.openai?.widgetState?.composer ?? ""
-  );
+  const [composer, setComposer] = useState(window.openai?.widgetState?.composer ?? "");
   const [mealSlot, setMealSlot] = useState<MealSlot>(
     window.openai?.widgetState?.mealSlot ?? "lunch"
   );
@@ -408,7 +410,7 @@ function App() {
   const deferredQuery = useDeferredValue(searchQuery.trim());
   const locale = window.openai?.locale ?? "en-US";
 
-  const applyPayload = (payload: ToolPayload) => {
+  const applyPayload = useCallback((payload: ToolPayload) => {
     startTransition(() => {
       if (payload.kind === "dashboard") {
         setDashboard(payload.dashboard);
@@ -421,7 +423,7 @@ function App() {
         setCatalogResults(payload.results);
       }
     });
-  };
+  }, []);
 
   const bridge = useMcpBridge(applyPayload);
 
@@ -482,7 +484,7 @@ function App() {
       stopPolling();
       window.removeEventListener("openai:set_globals", handleSetGlobals);
     };
-  }, []);
+  }, [applyPayload]);
 
   useEffect(() => {
     const nextState: WidgetState = { activeDate, mealSlot, composer };
@@ -523,7 +525,7 @@ function App() {
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [bridge, deferredQuery]);
+  }, [bridge, deferredQuery, applyPayload]);
 
   const calorieFraction = dashboard
     ? fraction(dashboard.summary.totals.calories, dashboard.summary.targets.calories)
@@ -536,49 +538,50 @@ function App() {
     [calorieFraction]
   );
 
-  async function runTool(
-    busyToken: string,
-    nextStatus: string,
-    name: string,
-    args: Record<string, unknown>
-  ) {
-    setBusyKey(busyToken);
-    setStatus(nextStatus);
-    try {
-      const response = await bridge.callTool(name, args);
-      const payload = (response as { structuredContent?: ToolPayload }).structuredContent;
-      if (payload) {
-        applyPayload(payload);
+  const runTool = useCallback(
+    async (busyToken: string, nextStatus: string, name: string, args: Record<string, unknown>) => {
+      setBusyKey(busyToken);
+      setStatus(nextStatus);
+      try {
+        const response = await bridge.callTool(name, args);
+        const payload = (response as { structuredContent?: ToolPayload }).structuredContent;
+        if (payload) {
+          applyPayload(payload);
+        }
+        setStatus("Synced");
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Tool call failed");
+      } finally {
+        setBusyKey((current) => (current === busyToken ? null : current));
       }
-      setStatus("Synced");
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Tool call failed");
-    } finally {
-      setBusyKey((current) => (current === busyToken ? null : current));
-    }
-  }
+    },
+    [bridge, applyPayload]
+  );
 
-  async function hydrateDashboard(force = false) {
-    if (!bridge.ready) {
-      setStatus("Bridge connecting");
-      return;
-    }
-    if (!force && didAutoHydrateRef.current) {
-      return;
-    }
+  const hydrateDashboard = useCallback(
+    async (force = false) => {
+      if (!bridge.ready) {
+        setStatus("Bridge connecting");
+        return;
+      }
+      if (!force && didAutoHydrateRef.current) {
+        return;
+      }
 
-    didAutoHydrateRef.current = true;
-    await runTool("hydrate", "Loading dashboard", "open_calorie_dashboard", {
-      date: activeDate,
-    });
-  }
+      didAutoHydrateRef.current = true;
+      await runTool("hydrate", "Loading dashboard", "open_calorie_dashboard", {
+        date: activeDate,
+      });
+    },
+    [activeDate, bridge.ready, runTool]
+  );
 
   useEffect(() => {
     if (dashboard || !bridge.ready) {
       return;
     }
     void hydrateDashboard();
-  }, [dashboard, bridge.ready, activeDate]);
+  }, [dashboard, bridge.ready, hydrateDashboard]);
 
   async function handleQuickLog() {
     if (!composer.trim()) {
@@ -754,13 +757,14 @@ function App() {
               <span className="eyebrow">Quick log</span>
               <h2>Plain English or quick add</h2>
             </div>
-            <span className="status-pill">
-              {bridge.ready ? status : "Bridge connecting"}
-            </span>
+            <span className="status-pill">{bridge.ready ? status : "Bridge connecting"}</span>
           </div>
 
           <div className="composer__controls">
-            <select value={mealSlot} onChange={(event) => setMealSlot(event.target.value as MealSlot)}>
+            <select
+              value={mealSlot}
+              onChange={(event) => setMealSlot(event.target.value as MealSlot)}
+            >
               <option value="breakfast">Breakfast</option>
               <option value="lunch">Lunch</option>
               <option value="dinner">Dinner</option>
@@ -912,7 +916,9 @@ function App() {
               <span className="eyebrow">Daily board</span>
               <h2>Every meal in one scroll</h2>
             </div>
-            <span>{dashboard.mealGroups.reduce((sum, group) => sum + group.entries.length, 0)} entries</span>
+            <span>
+              {dashboard.mealGroups.reduce((sum, group) => sum + group.entries.length, 0)} entries
+            </span>
           </div>
 
           <div className="meal-board__grid">

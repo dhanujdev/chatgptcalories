@@ -61,9 +61,7 @@ const ROOT_DIR = resolveRootDir(__dirname);
 function readWidgetBundle(): { css: string; js: string } {
   const distDir = path.join(ROOT_DIR, "web", "dist");
   if (!existsSync(distDir)) {
-    throw new Error(
-      `Widget assets missing in ${distDir}. Run "npm run build:web" first.`
-    );
+    throw new Error(`Widget assets missing in ${distDir}. Run "npm run build:web" first.`);
   }
 
   const files = readdirSync(distDir);
@@ -135,203 +133,272 @@ function createAppServer(): McpServer {
   });
 
   // Widget resource
-  registerAppResource(
-    server,
-    "calorie-command-widget",
-    WIDGET_URI,
-    {},
-    async () => ({
-      contents: [
-        {
-          uri: WIDGET_URI,
-          mimeType: RESOURCE_MIME_TYPE,
-          text: widgetHtml(),
-          _meta: {
-            ui: {
-              prefersBorder: true,
-              csp: { connectDomains: [], resourceDomains: [] },
-            },
-            "openai/widgetDescription":
-              "An interactive calorie tracker with fast meal logging, macro pacing, and daily runway.",
+  registerAppResource(server, "calorie-command-widget", WIDGET_URI, {}, async () => ({
+    contents: [
+      {
+        uri: WIDGET_URI,
+        mimeType: RESOURCE_MIME_TYPE,
+        text: widgetHtml(),
+        _meta: {
+          ui: {
+            prefersBorder: true,
+            csp: { connectDomains: [], resourceDomains: [] },
           },
+          "openai/widgetDescription":
+            "An interactive calorie tracker with fast meal logging, macro pacing, and daily runway.",
         },
-      ],
-    })
+      },
+    ],
+  }));
+
+  registerAppTool(
+    server,
+    openCalorieDashboard.name,
+    {
+      title: openCalorieDashboard.title,
+      description: openCalorieDashboard.description,
+      inputSchema: openCalorieDashboard.inputSchema,
+      annotations: openCalorieDashboard.annotations,
+      _meta: {
+        ui: { resourceUri: WIDGET_URI, visibility: ["model"] },
+        "openai/outputTemplate": WIDGET_URI,
+        ...toolStatus("Opening calorie dashboard", "Dashboard ready"),
+      },
+    },
+    openCalorieDashboard.execute
   );
 
-  registerAppTool(server, openCalorieDashboard.name, {
-    title: openCalorieDashboard.title,
-    description: openCalorieDashboard.description,
-    inputSchema: openCalorieDashboard.inputSchema,
-    annotations: openCalorieDashboard.annotations,
-    _meta: {
-      ui: { resourceUri: WIDGET_URI, visibility: ["model"] },
-      "openai/outputTemplate": WIDGET_URI,
-      ...toolStatus("Opening calorie dashboard", "Dashboard ready"),
+  registerAppTool(
+    server,
+    loadDaySnapshot.name,
+    {
+      title: loadDaySnapshot.title,
+      description: loadDaySnapshot.description,
+      inputSchema: loadDaySnapshot.inputSchema,
+      annotations: loadDaySnapshot.annotations,
+      _meta: {
+        ui: { visibility: ["model", "app"] },
+        ...toolStatus("Loading day snapshot", "Snapshot ready"),
+      },
     },
-  }, openCalorieDashboard.execute);
+    loadDaySnapshot.execute
+  );
 
-  registerAppTool(server, loadDaySnapshot.name, {
-    title: loadDaySnapshot.title,
-    description: loadDaySnapshot.description,
-    inputSchema: loadDaySnapshot.inputSchema,
-    annotations: loadDaySnapshot.annotations,
-    _meta: {
-      ui: { visibility: ["model", "app"] },
-      ...toolStatus("Loading day snapshot", "Snapshot ready"),
+  registerAppTool(
+    server,
+    logMealFromText.name,
+    {
+      title: logMealFromText.title,
+      description: logMealFromText.description,
+      inputSchema: logMealFromText.inputSchema,
+      annotations: logMealFromText.annotations,
+      _meta: {
+        ui: { visibility: ["model", "app"] },
+        ...toolStatus("Logging meal", "Meal logged"),
+      },
     },
-  }, loadDaySnapshot.execute);
+    logMealFromText.execute
+  );
 
-  registerAppTool(server, logMealFromText.name, {
-    title: logMealFromText.title,
-    description: logMealFromText.description,
-    inputSchema: logMealFromText.inputSchema,
-    annotations: logMealFromText.annotations,
-    _meta: {
-      ui: { visibility: ["model", "app"] },
-      ...toolStatus("Logging meal", "Meal logged"),
+  registerAppTool(
+    server,
+    searchFoodCatalogTool.name,
+    {
+      title: searchFoodCatalogTool.title,
+      description: searchFoodCatalogTool.description,
+      inputSchema: searchFoodCatalogTool.inputSchema,
+      annotations: searchFoodCatalogTool.annotations,
+      _meta: {
+        ui: { visibility: ["app"] },
+        ...toolStatus("Searching foods", "Search complete"),
+      },
     },
-  }, logMealFromText.execute);
+    searchFoodCatalogTool.execute
+  );
 
-  registerAppTool(server, searchFoodCatalogTool.name, {
-    title: searchFoodCatalogTool.title,
-    description: searchFoodCatalogTool.description,
-    inputSchema: searchFoodCatalogTool.inputSchema,
-    annotations: searchFoodCatalogTool.annotations,
-    _meta: {
-      ui: { visibility: ["app"] },
-      ...toolStatus("Searching foods", "Search complete"),
+  registerAppTool(
+    server,
+    logFoodSelection.name,
+    {
+      title: logFoodSelection.title,
+      description: logFoodSelection.description,
+      inputSchema: logFoodSelection.inputSchema,
+      annotations: logFoodSelection.annotations,
+      _meta: {
+        ui: { visibility: ["model", "app"] },
+        ...toolStatus("Adding food", "Food added"),
+      },
     },
-  }, searchFoodCatalogTool.execute);
+    logFoodSelection.execute
+  );
 
-  registerAppTool(server, logFoodSelection.name, {
-    title: logFoodSelection.title,
-    description: logFoodSelection.description,
-    inputSchema: logFoodSelection.inputSchema,
-    annotations: logFoodSelection.annotations,
-    _meta: {
-      ui: { visibility: ["model", "app"] },
-      ...toolStatus("Adding food", "Food added"),
+  registerAppTool(
+    server,
+    updateGoalTargets.name,
+    {
+      title: updateGoalTargets.title,
+      description: updateGoalTargets.description,
+      inputSchema: updateGoalTargets.inputSchema,
+      annotations: updateGoalTargets.annotations,
+      _meta: {
+        ui: { visibility: ["model", "app"] },
+        ...toolStatus("Saving targets", "Targets updated"),
+      },
     },
-  }, logFoodSelection.execute);
+    updateGoalTargets.execute
+  );
 
-  registerAppTool(server, updateGoalTargets.name, {
-    title: updateGoalTargets.title,
-    description: updateGoalTargets.description,
-    inputSchema: updateGoalTargets.inputSchema,
-    annotations: updateGoalTargets.annotations,
-    _meta: {
-      ui: { visibility: ["model", "app"] },
-      ...toolStatus("Saving targets", "Targets updated"),
+  registerAppTool(
+    server,
+    removeMealEntry.name,
+    {
+      title: removeMealEntry.title,
+      description: removeMealEntry.description,
+      inputSchema: removeMealEntry.inputSchema,
+      annotations: removeMealEntry.annotations,
+      _meta: {
+        ui: { visibility: ["model", "app"] },
+        ...toolStatus("Removing entry", "Entry removed"),
+      },
     },
-  }, updateGoalTargets.execute);
+    removeMealEntry.execute
+  );
 
-  registerAppTool(server, removeMealEntry.name, {
-    title: removeMealEntry.title,
-    description: removeMealEntry.description,
-    inputSchema: removeMealEntry.inputSchema,
-    annotations: removeMealEntry.annotations,
-    _meta: {
-      ui: { visibility: ["model", "app"] },
-      ...toolStatus("Removing entry", "Entry removed"),
+  registerAppTool(
+    server,
+    analyzeMealPhoto.name,
+    {
+      title: analyzeMealPhoto.title,
+      description: analyzeMealPhoto.description,
+      inputSchema: analyzeMealPhotoInput,
+      annotations: analyzeMealPhoto.annotations,
+      _meta: {
+        ui: { visibility: ["app"] },
+        "openai/fileParams": ["photo"],
+        ...toolStatus("Saving meal photo", "Photo saved"),
+      },
     },
-  }, removeMealEntry.execute);
-
-  registerAppTool(server, analyzeMealPhoto.name, {
-    title: analyzeMealPhoto.title,
-    description: analyzeMealPhoto.description,
-    inputSchema: analyzeMealPhotoInput,
-    annotations: analyzeMealPhoto.annotations,
-    _meta: {
-      ui: { visibility: ["app"] },
-      "openai/fileParams": ["photo"],
-      ...toolStatus("Saving meal photo", "Photo saved"),
-    },
-  }, analyzeMealPhoto.execute);
+    analyzeMealPhoto.execute
+  );
 
   // ── Agent context (the key tool) ──
-  registerAppTool(server, retrieveAgentContext.name, {
-    title: retrieveAgentContext.title,
-    description: retrieveAgentContext.description,
-    inputSchema: retrieveAgentContextInput,
-    annotations: retrieveAgentContext.annotations,
-    _meta: {
-      ui: { visibility: ["model"] },
-      ...toolStatus("Loading your nutrition profile", "Context loaded"),
+  registerAppTool(
+    server,
+    retrieveAgentContext.name,
+    {
+      title: retrieveAgentContext.title,
+      description: retrieveAgentContext.description,
+      inputSchema: retrieveAgentContextInput,
+      annotations: retrieveAgentContext.annotations,
+      _meta: {
+        ui: { visibility: ["model"] },
+        ...toolStatus("Loading your nutrition profile", "Context loaded"),
+      },
     },
-  }, retrieveAgentContext.execute);
+    retrieveAgentContext.execute
+  );
 
   // ── Analyze meal (ChatGPT sends structured data) ──
-  registerAppTool(server, analyzeMeal.name, {
-    title: analyzeMeal.title,
-    description: analyzeMeal.description,
-    inputSchema: analyzeMealInput,
-    annotations: analyzeMeal.annotations,
-    _meta: {
-      ui: { visibility: ["model"] },
-      ...toolStatus("Saving the meal analysis", "Analysis saved"),
+  registerAppTool(
+    server,
+    analyzeMeal.name,
+    {
+      title: analyzeMeal.title,
+      description: analyzeMeal.description,
+      inputSchema: analyzeMealInput,
+      annotations: analyzeMeal.annotations,
+      _meta: {
+        ui: { visibility: ["model"] },
+        ...toolStatus("Saving the meal analysis", "Analysis saved"),
+      },
     },
-  }, analyzeMeal.execute);
+    analyzeMeal.execute
+  );
 
   // ── Weekly trends ──
-  registerAppTool(server, getWeeklyTrends.name, {
-    title: getWeeklyTrends.title,
-    description: getWeeklyTrends.description,
-    inputSchema: getWeeklyTrendsInput,
-    annotations: getWeeklyTrends.annotations,
-    _meta: {
-      ui: { visibility: ["model"] },
-      ...toolStatus("Loading weekly trends", "Trends ready"),
+  registerAppTool(
+    server,
+    getWeeklyTrends.name,
+    {
+      title: getWeeklyTrends.title,
+      description: getWeeklyTrends.description,
+      inputSchema: getWeeklyTrendsInput,
+      annotations: getWeeklyTrends.annotations,
+      _meta: {
+        ui: { visibility: ["model"] },
+        ...toolStatus("Loading weekly trends", "Trends ready"),
+      },
     },
-  }, getWeeklyTrends.execute);
+    getWeeklyTrends.execute
+  );
 
   // ── Update preferences ──
-  registerAppTool(server, updatePreferences.name, {
-    title: updatePreferences.title,
-    description: updatePreferences.description,
-    inputSchema: updatePreferencesInput,
-    annotations: updatePreferences.annotations,
-    _meta: {
-      ui: { visibility: ["model"] },
-      ...toolStatus("Saving preferences", "Preferences saved"),
+  registerAppTool(
+    server,
+    updatePreferences.name,
+    {
+      title: updatePreferences.title,
+      description: updatePreferences.description,
+      inputSchema: updatePreferencesInput,
+      annotations: updatePreferences.annotations,
+      _meta: {
+        ui: { visibility: ["model"] },
+        ...toolStatus("Saving preferences", "Preferences saved"),
+      },
     },
-  }, updatePreferences.execute);
+    updatePreferences.execute
+  );
 
   // ── Log weight ──
-  registerAppTool(server, logWeight.name, {
-    title: logWeight.title,
-    description: logWeight.description,
-    inputSchema: logWeightInput,
-    annotations: logWeight.annotations,
-    _meta: {
-      ui: { visibility: ["model"] },
-      ...toolStatus("Logging weight", "Weight logged"),
+  registerAppTool(
+    server,
+    logWeight.name,
+    {
+      title: logWeight.title,
+      description: logWeight.description,
+      inputSchema: logWeightInput,
+      annotations: logWeight.annotations,
+      _meta: {
+        ui: { visibility: ["model"] },
+        ...toolStatus("Logging weight", "Weight logged"),
+      },
     },
-  }, logWeight.execute);
+    logWeight.execute
+  );
 
   // ── Save memory fact ──
-  registerAppTool(server, saveMemoryFact.name, {
-    title: saveMemoryFact.title,
-    description: saveMemoryFact.description,
-    inputSchema: saveMemoryFactInput,
-    annotations: saveMemoryFact.annotations,
-    _meta: {
-      ui: { visibility: ["model"] },
-      ...toolStatus("Remembering that", "Fact saved"),
+  registerAppTool(
+    server,
+    saveMemoryFact.name,
+    {
+      title: saveMemoryFact.title,
+      description: saveMemoryFact.description,
+      inputSchema: saveMemoryFactInput,
+      annotations: saveMemoryFact.annotations,
+      _meta: {
+        ui: { visibility: ["model"] },
+        ...toolStatus("Remembering that", "Fact saved"),
+      },
     },
-  }, saveMemoryFact.execute);
+    saveMemoryFact.execute
+  );
 
   // ── Memory dashboard ──
-  registerAppTool(server, getMemoryDashboard.name, {
-    title: getMemoryDashboard.title,
-    description: getMemoryDashboard.description,
-    inputSchema: getMemoryDashboardInput,
-    annotations: getMemoryDashboard.annotations,
-    _meta: {
-      ui: { visibility: ["model"] },
-      ...toolStatus("Loading memory", "Memory loaded"),
+  registerAppTool(
+    server,
+    getMemoryDashboard.name,
+    {
+      title: getMemoryDashboard.title,
+      description: getMemoryDashboard.description,
+      inputSchema: getMemoryDashboardInput,
+      annotations: getMemoryDashboard.annotations,
+      _meta: {
+        ui: { visibility: ["model"] },
+        ...toolStatus("Loading memory", "Memory loaded"),
+      },
     },
-  }, getMemoryDashboard.execute);
+    getMemoryDashboard.execute
+  );
 
   return server;
 }
@@ -345,7 +412,8 @@ export default async function handler(req: any, res: any) {
   }
 
   const url = new URL(req.url, `http://${req.headers?.host ?? "localhost"}`);
-  const isMcpPath = url.pathname === MCP_PATH || url.pathname === "/api" || url.pathname === "/api/index";
+  const isMcpPath =
+    url.pathname === MCP_PATH || url.pathname === "/api" || url.pathname === "/api/index";
 
   if (req.method === "GET" && url.pathname === "/") {
     res.writeHead(200, { "content-type": "text/plain" });

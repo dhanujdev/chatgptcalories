@@ -161,13 +161,10 @@ export function buildDashboardSnapshot(db: JournalDb, date: string): DashboardSn
 
   const calorieAccuracy = Math.max(
     0,
-    100 - Math.min(100, Math.abs(remaining.calories) / Math.max(db.targets.calories, 1) * 120)
+    100 - Math.min(100, (Math.abs(remaining.calories) / Math.max(db.targets.calories, 1)) * 120)
   );
-  const proteinAccuracy = Math.min(
-    100,
-    totals.protein / Math.max(db.targets.protein, 1) * 100
-  );
-  const adherenceScore = Math.round((calorieAccuracy * 0.6 + proteinAccuracy * 0.4));
+  const proteinAccuracy = Math.min(100, (totals.protein / Math.max(db.targets.protein, 1)) * 100);
+  const adherenceScore = Math.round(calorieAccuracy * 0.6 + proteinAccuracy * 0.4);
 
   return {
     stateVersion: db.lastMutationId,
@@ -189,4 +186,3 @@ export function buildDashboardSnapshot(db: JournalDb, date: string): DashboardSn
     weeklyTrend: weeklyTrend(db, date, db.targets.calories),
   };
 }
-

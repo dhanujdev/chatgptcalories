@@ -72,6 +72,22 @@ npm run dev
 
 The server listens on `http://localhost:8787/mcp`.
 
+## Quality gates
+
+Run the full local quality pipeline before pushing:
+
+```bash
+npm run validate
+```
+
+Useful individual commands:
+
+- `npm run lint`
+- `npm run format:check`
+- `npm run test`
+- `npm run test:coverage`
+- `npm run check`
+
 ## ChatGPT setup
 
 1. Expose your local server with HTTPS:
@@ -90,7 +106,14 @@ Planned validation for this repo:
 
 - Level 0: repo contract review
 - Level 1: TypeScript/Vite build
-- Level 2: local `/mcp` runtime sanity
+- Level 2: unit + integration tests
+- Level 3: local `/mcp` runtime sanity
+
+## Documentation map
+
+- Contributor/agent workflow: [AGENTS.md](./AGENTS.md)
+- Architecture overview: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+- Tool/data contracts: [docs/CONTRACTS.md](./docs/CONTRACTS.md)
 
 ## Docs used
 

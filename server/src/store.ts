@@ -10,9 +10,6 @@ import type {
   MealSlot,
 } from "../../shared/types.js";
 
-/** Legacy source mapping: old store used "text" and "catalog". */
-type LegacySource = MealEntry["source"];
-
 type DayRecord = {
   entries: Array<MealEntry & { idempotencyKey?: string | null }>;
 };
@@ -352,4 +349,3 @@ export class JournalStore {
     return normalizeDate(value);
   }
 }
-

@@ -262,7 +262,9 @@ function extractCount(description: string, item: FoodCatalogItem): number {
 export function searchFoodCatalog(query: string, limit = 6): CatalogResult[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) {
-    return FOOD_CATALOG.slice(0, limit).map(({ aliases: _aliases, countWords: _countWords, ...item }) => item);
+    return FOOD_CATALOG.slice(0, limit).map(
+      ({ aliases: _aliases, countWords: _countWords, ...item }) => item
+    );
   }
 
   const ranked = FOOD_CATALOG.map((item) => {
@@ -291,10 +293,7 @@ export function findCatalogItem(id: string): FoodCatalogItem | undefined {
   return FOOD_CATALOG.find((item) => item.id === id);
 }
 
-export function estimateMealFromText(
-  description: string,
-  mealSlot: MealSlot
-): EstimatedMeal {
+export function estimateMealFromText(description: string, mealSlot: MealSlot): EstimatedMeal {
   const normalized = description.trim().toLowerCase();
   void mealSlot;
   const matched = FOOD_CATALOG.filter((item) =>
@@ -342,10 +341,7 @@ export function estimateMealFromText(
       matched.length === 1 && firstMatch
         ? formatScaledServingText(firstMatch, estimated[0]?.servings ?? 1)
         : `${matched.length} matched foods`,
-    servings:
-      matched.length === 1
-        ? Math.max(0.5, Math.min(estimated[0]?.servings ?? 1, 4))
-        : 1,
+    servings: matched.length === 1 ? Math.max(0.5, Math.min(estimated[0]?.servings ?? 1, 4)) : 1,
     notes:
       matched.length > 1
         ? estimated.map((item) => `${item.servings}x ${item.name}`).join(", ")

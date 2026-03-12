@@ -248,10 +248,13 @@ async function estimateFromUsda(description: string): Promise<ResolvedMeal | nul
     return null;
   }
 
-  const combined = resolved.reduce(
-    (sum, item) => addMacros(sum, item.macros),
-    { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
-  );
+  const combined = resolved.reduce((sum, item) => addMacros(sum, item.macros), {
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    fiber: 0,
+  });
   const unresolvedCount = total - resolved.length;
   const confidence = confidenceForResolution(unresolvedCount);
 
@@ -346,10 +349,13 @@ async function estimateFromEdamam(description: string): Promise<ResolvedMeal | n
     return null;
   }
 
-  const combined = resolved.reduce(
-    (sum, item) => addMacros(sum, item.macros),
-    { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
-  );
+  const combined = resolved.reduce((sum, item) => addMacros(sum, item.macros), {
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+    fiber: 0,
+  });
   const unresolvedCount = total - resolved.length;
   const confidence = confidenceForResolution(unresolvedCount);
 
@@ -388,7 +394,10 @@ async function estimateFromEdamam(description: string): Promise<ResolvedMeal | n
   };
 }
 
-export async function resolveMealFromText(description: string, mealSlot: MealSlot): Promise<ResolvedMeal> {
+export async function resolveMealFromText(
+  description: string,
+  mealSlot: MealSlot
+): Promise<ResolvedMeal> {
   try {
     const usdaResult = await estimateFromUsda(description);
     if (usdaResult) {

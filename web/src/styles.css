@@ -455,7 +455,9 @@ button {
   background: rgba(255, 247, 240, 0.84);
   padding: 12px 14px;
   text-align: left;
-  transition: transform 180ms ease, background 180ms ease;
+  transition:
+    transform 180ms ease,
+    background 180ms ease;
 }
 
 .entry-row:hover {

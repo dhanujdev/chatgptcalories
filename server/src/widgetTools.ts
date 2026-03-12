@@ -17,7 +17,6 @@ import {
   setGoalsInput,
 } from "../../shared/schemas.js";
 import type {
-  CatalogResult,
   DashboardPayload,
   DashboardSnapshot,
   GoalTargets,
@@ -151,10 +150,9 @@ function rowToMealEntry(row: FoodEntryRow): MealEntry {
 function buildMealGroups(entries: MealEntry[]): MealGroup[] {
   return MEAL_SLOTS.map((mealSlot) => {
     const groupedEntries = entries.filter((entry) => entry.mealSlot === mealSlot);
-    const totals = groupedEntries.reduce(
-      (sum, entry) => addMacros(sum, entry.macros),
-      { ...ZERO_MACROS }
-    );
+    const totals = groupedEntries.reduce((sum, entry) => addMacros(sum, entry.macros), {
+      ...ZERO_MACROS,
+    });
 
     return {
       mealSlot,
@@ -221,7 +219,11 @@ function dashboardSummaryLine(snapshot: DashboardSnapshot): string {
   );
 }
 
-function buildWeeklyTrend(entries: FoodEntryRow[], endDate: string, targetCalories: number): WeeklyTrendPoint[] {
+function buildWeeklyTrend(
+  entries: FoodEntryRow[],
+  endDate: string,
+  targetCalories: number
+): WeeklyTrendPoint[] {
   const byDate = new Map<string, MacroTotals>();
 
   for (const entry of entries) {
@@ -271,10 +273,9 @@ export async function buildDashboardSnapshot(date?: string): Promise<DashboardSn
 
   const entries = dayRows.map(rowToMealEntry);
   const mealGroups = buildMealGroups(entries);
-  const totals = mealGroups.reduce(
-    (sum, group) => addMacros(sum, group.totals),
-    { ...ZERO_MACROS }
-  );
+  const totals = mealGroups.reduce((sum, group) => addMacros(sum, group.totals), {
+    ...ZERO_MACROS,
+  });
   const targets = mapTargets(goalsRow);
   const remaining = {
     calories: round(targets.calories - totals.calories),
@@ -608,7 +609,12 @@ export const logMealFromText = {
     destructiveHint: false,
     openWorldHint: false,
   },
-  async execute(args: { date?: string; mealSlot?: MealSlot; description: string; dedupeKey?: string }) {
+  async execute(args: {
+    date?: string;
+    mealSlot?: MealSlot;
+    description: string;
+    dedupeKey?: string;
+  }) {
     const result = await logTextMealAndBuildDashboard(args);
     return {
       structuredContent: result.payload,
@@ -627,8 +633,7 @@ export const logMealFromText = {
 export const searchFoodCatalogTool = {
   name: "search_food_catalog",
   title: "Search food catalog",
-  description:
-    "Use this when the widget needs quick-add food results for the search box.",
+  description: "Use this when the widget needs quick-add food results for the search box.",
   inputSchema: searchFoodInput.shape,
   annotations: {
     readOnlyHint: true,
@@ -723,8 +728,7 @@ export const updateGoalTargets = {
 export const removeMealEntry = {
   name: "remove_meal_entry",
   title: "Remove meal entry",
-  description:
-    "Use this when the user deletes a meal entry from the dashboard.",
+  description: "Use this when the user deletes a meal entry from the dashboard.",
   inputSchema: removeEntryInput.shape,
   annotations: {
     readOnlyHint: false,
@@ -758,7 +762,11 @@ export const analyzeMealPhoto = {
     destructiveHint: false,
     openWorldHint: false,
   },
-  async execute(args: { date?: string; mealSlot: MealSlot; photo: { file_id: string; download_url: string } }) {
+  async execute(args: {
+    date?: string;
+    mealSlot: MealSlot;
+    photo: { file_id: string; download_url: string };
+  }) {
     const result = await analyzeMealPhotoAndBuildDashboard(args);
     return {
       structuredContent: result.payload,
