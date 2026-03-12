@@ -1,4 +1,4 @@
-import handler from "../server/src/index.ts";
+import handler from "../dist/server/server/src/index.js";
 
 // Vercel Serverless Function Config — Node.js runtime with streaming
 export const config = {
