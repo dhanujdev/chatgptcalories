@@ -64,6 +64,10 @@ type OpenAiBridge = {
   setWidgetState?: (state: WidgetState) => Promise<void> | void;
 };
 
+type SetGlobalsEvent = CustomEvent<{
+  globals?: Partial<OpenAiBridge>;
+}>;
+
 declare global {
   interface Window {
     openai?: OpenAiBridge;
@@ -424,17 +428,18 @@ function App() {
     let attempts = 0;
     let cancelled = false;
 
-    const hydrateFromHost = () => {
+    const hydrateFromHost = (globals?: Partial<OpenAiBridge>) => {
       if (cancelled) {
         return;
       }
 
-      const payload = unwrapToolPayload(window.openai?.toolOutput);
+      const source = globals ?? window.openai;
+      const payload = unwrapToolPayload(source?.toolOutput);
       if (payload) {
         applyPayload(payload);
       }
 
-      const hostState = window.openai?.widgetState;
+      const hostState = source?.widgetState;
       if (hostState) {
         setComposer(hostState.composer ?? "");
         setMealSlot(hostState.mealSlot ?? "lunch");
@@ -447,10 +452,19 @@ function App() {
       }
     };
 
+    const handleSetGlobals = (event: Event) => {
+      const customEvent = event as SetGlobalsEvent;
+      hydrateFromHost(customEvent.detail?.globals);
+    };
+
+    window.addEventListener("openai:set_globals", handleSetGlobals, {
+      passive: true,
+    });
     hydrateFromHost();
 
     return () => {
       cancelled = true;
+      window.removeEventListener("openai:set_globals", handleSetGlobals);
     };
   }, []);
 
