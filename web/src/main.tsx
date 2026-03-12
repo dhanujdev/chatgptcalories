@@ -101,7 +101,13 @@ function fraction(value: number, target: number): number {
 }
 
 function extractDashboard(payload: ToolPayload | null | undefined): DashboardSnapshot | null {
-  return payload?.kind === "dashboard" ? payload.dashboard : null;
+  if (!payload) return null;
+  if (payload.kind === "dashboard" && payload.dashboard) return payload.dashboard;
+  // Some host versions pass the dashboard object directly on toolOutput
+  if ("dashboard" in payload && (payload as Record<string, unknown>).dashboard) {
+    return (payload as Record<string, unknown>).dashboard as DashboardSnapshot;
+  }
+  return null;
 }
 
 function extractSearchResults(payload: ToolPayload | null | undefined): CatalogResult[] {
@@ -152,7 +158,13 @@ function useOpenAiGlobal<K extends keyof OpenAiBridge>(key: K): OpenAiBridge[K] 
         }
       };
       window.addEventListener("openai:set_globals", handler, { passive: true });
-      return () => window.removeEventListener("openai:set_globals", handler);
+      // Some host versions set properties without firing set_globals.
+      // Periodic onChange is cheap — React only re-renders if the snapshot changed.
+      const timer = window.setInterval(onChange, 200);
+      return () => {
+        window.removeEventListener("openai:set_globals", handler);
+        window.clearInterval(timer);
+      };
     },
     () => window.openai?.[key] ?? null,
     () => null
@@ -419,6 +431,15 @@ function MealSection({
 function App() {
   const initialPayload = unwrapToolPayload(window.openai?.toolOutput);
   const initialDashboard = extractDashboard(initialPayload);
+
+  // Debug: log what the host gave us on first render
+  console.log("[calories] mount", {
+    hasOpenai: !!window.openai,
+    toolOutput: window.openai?.toolOutput,
+    initialPayload,
+    initialDashboard,
+  });
+
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(initialDashboard);
   const [catalogResults, setCatalogResults] = useState<CatalogResult[]>(
     extractSearchResults(initialPayload)
@@ -469,8 +490,10 @@ function App() {
   const hostWidgetState = useOpenAiGlobal("widgetState") as WidgetState | null;
 
   useEffect(() => {
+    console.log("[calories] hostToolOutput changed", hostToolOutput);
     const payload = unwrapToolPayload(hostToolOutput as ToolPayload | ToolResultEnvelope | null);
     if (payload) {
+      console.log("[calories] applying payload from host", payload.kind);
       applyPayload(payload);
     }
   }, [hostToolOutput, applyPayload]);
@@ -541,8 +564,12 @@ function App() {
       setStatus(nextStatus);
       try {
         const response = await bridge.callTool(name, args);
-        const payload = (response as { structuredContent?: ToolPayload }).structuredContent;
-        if (payload) {
+        console.log("[calories] callTool response", name, response);
+        // RPC path returns { structuredContent }, modern bridge may return
+        // { result: string } or the payload directly — try all shapes.
+        const payload = unwrapToolPayload(response as ToolPayload | ToolResultEnvelope | null);
+        if (payload?.kind) {
+          console.log("[calories] applying callTool payload", payload.kind);
           applyPayload(payload);
         }
         setStatus("Synced");
