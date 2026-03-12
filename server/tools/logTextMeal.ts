@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { estimateMealFromText, findCatalogItem } from "../src/catalog.js";
-import { insertFoodEntry, getDayEntries } from "../supabase/queries.js";
+import { resolveMealFromText } from "../src/nutritionResolver.js";
+import { insertFoodEntry } from "../supabase/queries.js";
 import { DEFAULT_TIMEZONE } from "../../shared/constants.js";
 import type { FoodEntryInsert } from "../supabase/types.js";
 
@@ -37,7 +37,7 @@ export const logTextMeal = {
     }) {
         const nextDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayDate();
         const nextMealSlot = mealSlot ?? "lunch";
-        const estimate = estimateMealFromText(description, nextMealSlot);
+        const estimate = await resolveMealFromText(description, nextMealSlot);
 
         const entry: FoodEntryInsert = {
             user_id: "00000000-0000-0000-0000-000000000000",
@@ -45,7 +45,7 @@ export const logTextMeal = {
             meal: nextMealSlot,
             food_name: description,
             display_name: estimate.label,
-            servings: 1,
+            servings: estimate.servings,
             serving_label: estimate.servingText,
             calories: estimate.macros.calories,
             protein_g: estimate.macros.protein,
@@ -54,15 +54,27 @@ export const logTextMeal = {
             fiber_g: estimate.macros.fiber,
             source_kind: "manual",
             source_ref: dedupeKey ?? null,
-            provenance: estimate.confidence === "high" ? "catalog_resolved" : "estimated",
-            confidence: estimate.confidence === "high" ? 0.9 : estimate.confidence === "medium" ? 0.7 : 0.4,
+            provenance:
+                estimate.source === "usda_api" || estimate.source === "edamam_api"
+                    ? "exact"
+                    : estimate.confidence === "high"
+                        ? "catalog_resolved"
+                        : "estimated",
+            confidence:
+                estimate.source === "usda_api" || estimate.source === "edamam_api"
+                    ? 0.92
+                    : estimate.confidence === "high"
+                        ? 0.9
+                        : estimate.confidence === "medium"
+                            ? 0.7
+                            : 0.4,
             occurred_at: new Date().toISOString(),
             local_date: nextDate,
             timezone: DEFAULT_TIMEZONE,
             notes: estimate.notes,
         };
 
-        const saved = await insertFoodEntry(entry);
+        await insertFoodEntry(entry);
 
         return {
             content: [{ type: "text" as const, text: `Logged ${estimate.label} for ${nextMealSlot} on ${nextDate}. ${estimate.macros.calories} kcal, ${estimate.macros.protein}g protein.` }],

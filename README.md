@@ -36,6 +36,16 @@ Upstream examples used as the closest reference:
 
 ## Local run
 
+Set env vars in `.env` before running:
+
+```bash
+SUPABASE_URL=...
+SUPABASE_SERVICE_KEY=...
+USDA_API_KEY=... # optional, enables USDA nutrition lookups for text meal logging
+EDAMAM_APP_ID=... # optional fallback nutrition provider
+EDAMAM_APP_KEY=...
+```
+
 1. Install dependencies:
 
 ```bash

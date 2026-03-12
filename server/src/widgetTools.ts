@@ -36,7 +36,8 @@ import {
   upsertGoals,
 } from "../supabase/queries.js";
 import type { FoodEntryInsert, FoodEntryRow, UserGoalsRow } from "../supabase/types.js";
-import { estimateMealFromText, findCatalogItem, searchFoodCatalog } from "./catalog.js";
+import { findCatalogItem, searchFoodCatalog } from "./catalog.js";
+import { resolveMealFromText } from "./nutritionResolver.js";
 
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -339,7 +340,7 @@ export async function logTextMealAndBuildDashboard(args: {
 }) {
   const nextDate = normalizeDate(args.date);
   const nextMealSlot = args.mealSlot ?? "lunch";
-  const estimate = estimateMealFromText(args.description, nextMealSlot);
+  const estimate = await resolveMealFromText(args.description, nextMealSlot);
 
   if (args.dedupeKey) {
     const existing = await findExistingEntry(nextDate, args.dedupeKey);
@@ -358,7 +359,7 @@ export async function logTextMealAndBuildDashboard(args: {
     meal: nextMealSlot,
     food_name: args.description,
     display_name: estimate.label,
-    servings: 1,
+    servings: estimate.servings,
     serving_label: estimate.servingText,
     calories: estimate.macros.calories,
     protein_g: estimate.macros.protein,
@@ -367,8 +368,20 @@ export async function logTextMealAndBuildDashboard(args: {
     fiber_g: estimate.macros.fiber,
     source_kind: "manual",
     source_ref: args.dedupeKey ?? null,
-    provenance: estimate.confidence === "high" ? "catalog_resolved" : "estimated",
-    confidence: estimate.confidence === "high" ? 0.9 : estimate.confidence === "medium" ? 0.7 : 0.4,
+    provenance:
+      estimate.source === "usda_api" || estimate.source === "edamam_api"
+        ? "exact"
+        : estimate.confidence === "high"
+          ? "catalog_resolved"
+          : "estimated",
+    confidence:
+      estimate.source === "usda_api" || estimate.source === "edamam_api"
+        ? 0.92
+        : estimate.confidence === "high"
+          ? 0.9
+          : estimate.confidence === "medium"
+            ? 0.7
+            : 0.4,
     occurred_at: new Date().toISOString(),
     local_date: nextDate,
     timezone: DEFAULT_TIMEZONE,

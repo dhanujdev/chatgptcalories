@@ -5,19 +5,14 @@ type FoodCatalogItem = CatalogResult & {
   countWords?: string[];
 };
 
-type EstimatedMeal = {
+export type EstimatedMeal = {
   label: string;
   servingText: string;
+  servings: number;
   notes: string | null;
   macros: MacroTotals;
   confidence: "high" | "medium" | "low";
-};
-
-const mealDefaults: Record<MealSlot, string> = {
-  breakfast: "oatmeal bowl",
-  lunch: "grilled chicken bowl",
-  dinner: "salmon rice bowl",
-  snack: "greek yogurt",
+  matched: boolean;
 };
 
 function macros(
@@ -70,6 +65,16 @@ export const FOOD_CATALOG: FoodCatalogItem[] = [
     aliases: ["banana", "bananas"],
     countWords: ["banana", "bananas"],
     macros: macros(105, 1.3, 27, 0.4, 3.1),
+  },
+  {
+    id: "apple",
+    name: "Apple",
+    brand: null,
+    servingText: "1 medium apple",
+    tags: ["snack", "fruit", "fiber"],
+    aliases: ["apple", "apples"],
+    countWords: ["apple", "apples"],
+    macros: macros(95, 0.5, 25.1, 0.3, 4.4),
   },
   {
     id: "greek-yogurt",
@@ -291,31 +296,21 @@ export function estimateMealFromText(
   mealSlot: MealSlot
 ): EstimatedMeal {
   const normalized = description.trim().toLowerCase();
+  void mealSlot;
   const matched = FOOD_CATALOG.filter((item) =>
     item.aliases.some((alias) => normalized.includes(alias))
   );
 
   if (matched.length === 0) {
-    const fallback = FOOD_CATALOG.find(
-      (item) => item.aliases[0] === mealDefaults[mealSlot]
-    );
-
-    if (!fallback) {
-      return {
-        label: "Estimated meal",
-        servingText: "1 entry",
-        notes: "No strong food match found, so this is a conservative placeholder.",
-        macros: macros(420, 24, 38, 16, 5),
-        confidence: "low",
-      };
-    }
-
     return {
       label: description.trim(),
-      servingText: fallback.servingText,
-      notes: `No exact food match found. Used ${fallback.name.toLowerCase()} as the closest template.`,
-      macros: fallback.macros,
+      servingText: "1 entry",
+      servings: 1,
+      notes:
+        "No exact food match was found. Logged as an unclassified entry with 0 macros so it can be corrected without inventing nutrition.",
+      macros: macros(0, 0, 0, 0, 0),
       confidence: "low",
+      matched: false,
     };
   }
 
@@ -347,11 +342,16 @@ export function estimateMealFromText(
       matched.length === 1 && firstMatch
         ? formatScaledServingText(firstMatch, estimated[0]?.servings ?? 1)
         : `${matched.length} matched foods`,
+    servings:
+      matched.length === 1
+        ? Math.max(0.5, Math.min(estimated[0]?.servings ?? 1, 4))
+        : 1,
     notes:
       matched.length > 1
         ? estimated.map((item) => `${item.servings}x ${item.name}`).join(", ")
         : null,
     macros: total,
     confidence: matched.length > 1 ? "medium" : "high",
+    matched: true,
   };
 }
