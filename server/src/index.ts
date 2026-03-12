@@ -13,12 +13,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 // ─── Tool imports ────────────────────────────────────────────────────
-import { logTextMeal, logTextMealInput } from "../tools/logTextMeal.js";
 import { analyzeMeal, analyzeMealInput } from "../tools/analyzeMeal.js";
-import { searchFood, searchFoodInput } from "../tools/searchFood.js";
-import { getDailySummary, getDailySummaryInput } from "../tools/getDailySummary.js";
 import { getWeeklyTrends, getWeeklyTrendsInput } from "../tools/getWeeklyTrends.js";
-import { setGoals, setGoalsInput } from "../tools/setGoals.js";
 import { updatePreferences, updatePreferencesInput } from "../tools/updatePreferences.js";
 import { logWeight, logWeightInput } from "../tools/logWeight.js";
 import { retrieveAgentContext, retrieveAgentContextInput } from "../tools/retrieveAgentContext.js";
@@ -265,18 +261,6 @@ function createAppServer(): McpServer {
     },
   }, retrieveAgentContext.execute);
 
-  // ── Log text meal ──
-  registerAppTool(server, logTextMeal.name, {
-    title: logTextMeal.title,
-    description: logTextMeal.description,
-    inputSchema: logTextMealInput,
-    annotations: logTextMeal.annotations,
-    _meta: {
-      ui: { visibility: ["model", "app"] },
-      ...toolStatus("Logging that meal", "Meal logged"),
-    },
-  }, logTextMeal.execute);
-
   // ── Analyze meal (ChatGPT sends structured data) ──
   registerAppTool(server, analyzeMeal.name, {
     title: analyzeMeal.title,
@@ -289,30 +273,6 @@ function createAppServer(): McpServer {
     },
   }, analyzeMeal.execute);
 
-  // ── Search food catalog ──
-  registerAppTool(server, searchFood.name, {
-    title: searchFood.title,
-    description: searchFood.description,
-    inputSchema: searchFoodInput,
-    annotations: searchFood.annotations,
-    _meta: {
-      ui: { visibility: ["model", "app"] },
-      ...toolStatus("Searching foods", "Results ready"),
-    },
-  }, searchFood.execute);
-
-  // ── Daily summary ──
-  registerAppTool(server, getDailySummary.name, {
-    title: getDailySummary.title,
-    description: getDailySummary.description,
-    inputSchema: getDailySummaryInput,
-    annotations: getDailySummary.annotations,
-    _meta: {
-      ui: { visibility: ["model"] },
-      ...toolStatus("Loading daily summary", "Summary ready"),
-    },
-  }, getDailySummary.execute);
-
   // ── Weekly trends ──
   registerAppTool(server, getWeeklyTrends.name, {
     title: getWeeklyTrends.title,
@@ -324,18 +284,6 @@ function createAppServer(): McpServer {
       ...toolStatus("Loading weekly trends", "Trends ready"),
     },
   }, getWeeklyTrends.execute);
-
-  // ── Set goals ──
-  registerAppTool(server, setGoals.name, {
-    title: setGoals.title,
-    description: setGoals.description,
-    inputSchema: setGoalsInput,
-    annotations: setGoals.annotations,
-    _meta: {
-      ui: { visibility: ["model", "app"] },
-      ...toolStatus("Saving targets", "Targets updated"),
-    },
-  }, setGoals.execute);
 
   // ── Update preferences ──
   registerAppTool(server, updatePreferences.name, {
